@@ -19,6 +19,76 @@ from .github_client import GitHubClient
 # Number of concurrent API requests for fetching PR details
 MAX_WORKERS = 10
 
+# GraphQL query for fetching authored PRs with all required fields in one request
+# Using first: 50 to avoid timeout issues with large responses
+AUTHORED_PRS_GRAPHQL = """
+query($searchQuery: String!, $cursor: String) {
+  search(query: $searchQuery, type: ISSUE, first: 50, after: $cursor) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      ... on PullRequest {
+        number
+        title
+        body
+        url
+        state
+        merged
+        createdAt
+        mergedAt
+        additions
+        deletions
+        changedFiles
+        labels(first: 10) {
+          nodes {
+            name
+          }
+        }
+        repository {
+          name
+          nameWithOwner
+        }
+      }
+    }
+  }
+}
+"""
+
+# GraphQL query for fetching reviews - gets PRs reviewed by user with review details
+# Using first: 30 to avoid timeout issues
+REVIEWS_GRAPHQL = """
+query($searchQuery: String!, $username: String!, $cursor: String) {
+  search(query: $searchQuery, type: ISSUE, first: 30, after: $cursor) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      ... on PullRequest {
+        number
+        title
+        url
+        author {
+          login
+        }
+        repository {
+          name
+          nameWithOwner
+        }
+        reviews(first: 10, author: $username) {
+          nodes {
+            submittedAt
+            state
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 
 @dataclass
 class PullRequestData:
@@ -269,17 +339,19 @@ class DataFetcher:
             return " ".join(f"org:{org}" for org in self.orgs)
 
     def fetch_all(
-        self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False
+        self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False, use_graphql: bool = True
     ) -> ContributionData:
         """
-        Fetch all contribution data using GitHub Search API.
+        Fetch all contribution data using GitHub API.
 
-        This is much more efficient than iterating through all PRs in each repo,
-        as the Search API filters by author/reviewer on the server side.
+        By default, uses GraphQL API for efficiency (fewer API calls, all data in one request).
+        Falls back to REST API if GraphQL fails.
 
         Args:
             progress: Optional Rich progress bar.
             console: Optional Rich console for status updates.
+            fetch_commits: Whether to fetch commit data (slower, disabled by default).
+            use_graphql: Whether to use GraphQL API (default True). Falls back to REST if GraphQL fails.
 
         Returns:
             ContributionData containing all fetched data.
@@ -298,6 +370,8 @@ class DataFetcher:
                 console.print(f"  [dim]Searching in {len(self.repos)} repo(s) across {len(self.orgs)} org(s)[/dim]")
             else:
                 console.print(f"  [dim]Searching across all repos in {len(self.orgs)} org(s)[/dim]")
+            if use_graphql:
+                console.print(f"  [dim]Using GraphQL API for efficient fetching[/dim]")
             console.print("")
 
         # Create progress task if provided - we have 2 or 3 phases depending on fetch_commits
@@ -306,24 +380,43 @@ class DataFetcher:
             total_phases = 3 if fetch_commits else 2
             task = progress.add_task("[cyan]Fetching contributions...", total=total_phases)
 
-        # Phase 1: Fetch authored PRs using Search API
+        # Phase 1: Fetch authored PRs
         if progress and task is not None:
             progress.update(task, description="[cyan]Searching for your PRs...")
-        self._fetch_authored_prs_search(username, scope_query, data, console)
+        
+        # Try GraphQL first, fall back to REST if it fails
+        if use_graphql:
+            graphql_success = self._fetch_authored_prs_graphql(username, scope_query, data, console)
+            if not graphql_success:
+                # Fall back to REST
+                self._fetch_authored_prs_search(username, scope_query, data, console)
+        else:
+            self._fetch_authored_prs_search(username, scope_query, data, console)
+        
         if progress and task is not None:
             progress.update(task, advance=1)
 
-        # Phase 2: Fetch reviews using Search API
+        # Phase 2: Fetch reviews
         if progress and task is not None:
             progress.update(
                 task,
                 description=f"[cyan]Searching for your reviews... [dim]({len(data.pull_requests)} PRs found)[/dim]",
             )
-        self._fetch_reviews_search(username, scope_query, data, console)
+        
+        # Try GraphQL first, fall back to REST if it fails
+        if use_graphql:
+            graphql_success = self._fetch_reviews_graphql(username, scope_query, data, console)
+            if not graphql_success:
+                # Fall back to REST
+                self._fetch_reviews_search(username, scope_query, data, console)
+        else:
+            self._fetch_reviews_search(username, scope_query, data, console)
+        
         if progress and task is not None:
             progress.update(task, advance=1)
 
         # Phase 3: Fetch commits (optional, disabled by default)
+        # Note: Commits still use REST as they're rarely needed and GraphQL commit search is limited
         if fetch_commits:
             if progress and task is not None:
                 progress.update(
@@ -469,6 +562,264 @@ class DataFetcher:
 
         except Exception as e:
             print(f"Warning: Could not search for commits: {e}", file=sys.stderr)
+
+    # =========================================================================
+    # GraphQL-based fetch methods (much more efficient than REST)
+    # =========================================================================
+
+    def _get_graphql_scopes(self) -> list[str]:
+        """
+        Get list of scope queries for GraphQL.
+        
+        When specific repos are requested, returns one scope per repo to query separately.
+        When fetching all repos in orgs, returns one scope per org.
+        """
+        if self.repos:
+            # Query each repo separately to avoid query length issues
+            scopes = []
+            for org in self.orgs:
+                for repo in self.repos:
+                    scopes.append(f"repo:{org}/{repo}")
+            return scopes
+        else:
+            # Query each org
+            return [f"org:{org}" for org in self.orgs]
+
+    def _fetch_authored_prs_graphql(
+        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
+    ) -> bool:
+        """
+        Fetch pull requests authored by the user using GraphQL API.
+        
+        This is much more efficient than REST as it fetches all PR data
+        (including additions, deletions, changedFiles) in a single request per page.
+        
+        When specific repos are requested, queries each repo separately to avoid
+        query length issues with GitHub's GraphQL API.
+        
+        Returns:
+            True if successful, False if GraphQL failed (caller should fall back to REST).
+        """
+        scopes = self._get_graphql_scopes()
+        
+        if console:
+            console.print(f"  [dim]Fetching merged PRs via GraphQL ({len(scopes)} scope(s))...[/dim]")
+        
+        try:
+            total_fetched = 0
+            
+            for scope_idx, scope in enumerate(scopes):
+                # Build the search query for this scope
+                search_query = (
+                    f"type:pr author:{username} is:merged "
+                    f"merged:{self.start_date_str}..{self.end_date_str} {scope}"
+                )
+                
+                cursor = None
+                
+                while True:
+                    result = self.client.execute_graphql(
+                        AUTHORED_PRS_GRAPHQL,
+                        variables={"searchQuery": search_query, "cursor": cursor}
+                    )
+                    
+                    search_data = result.get("search", {})
+                    nodes = search_data.get("nodes", [])
+                    page_info = search_data.get("pageInfo", {})
+                    
+                    for node in nodes:
+                        if not node:  # Skip null nodes
+                            continue
+                        
+                        pr_data = self._parse_graphql_pr(node, is_author=True)
+                        if pr_data:
+                            data.pull_requests.append(pr_data)
+                            total_fetched += 1
+                    
+                    if console:
+                        console.print(f"  [dim]Fetched {total_fetched} PRs (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
+                    
+                    # Check for more pages
+                    if page_info.get("hasNextPage"):
+                        cursor = page_info.get("endCursor")
+                    else:
+                        break
+            
+            if console:
+                console.print(f"  [dim]Processed {total_fetched} merged PRs via GraphQL          [/dim]")
+            
+            return True
+            
+        except Exception as e:
+            if console:
+                console.print(f"  [dim]GraphQL failed, falling back to REST: {e}[/dim]")
+            return False
+
+    def _fetch_reviews_graphql(
+        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
+    ) -> bool:
+        """
+        Fetch code reviews given by the user using GraphQL API.
+        
+        This fetches PRs reviewed by the user along with their review details
+        in a single request per page, avoiding the N+1 problem of REST.
+        
+        When specific repos are requested, queries each repo separately to avoid
+        query length issues with GitHub's GraphQL API.
+        
+        Returns:
+            True if successful, False if GraphQL failed (caller should fall back to REST).
+        """
+        scopes = self._get_graphql_scopes()
+        
+        if console:
+            console.print(f"  [dim]Fetching reviews via GraphQL ({len(scopes)} scope(s))...[/dim]")
+        
+        try:
+            total_reviews = 0
+            prs_processed = 0
+            
+            for scope_idx, scope in enumerate(scopes):
+                # Build the search query for this scope
+                search_query = (
+                    f"type:pr reviewed-by:{username} -author:{username} "
+                    f"updated:{self.start_date_str}..{self.end_date_str} {scope}"
+                )
+                
+                cursor = None
+                
+                while True:
+                    result = self.client.execute_graphql(
+                        REVIEWS_GRAPHQL,
+                        variables={
+                            "searchQuery": search_query,
+                            "username": username,
+                            "cursor": cursor,
+                        }
+                    )
+                    
+                    search_data = result.get("search", {})
+                    nodes = search_data.get("nodes", [])
+                    page_info = search_data.get("pageInfo", {})
+                    
+                    for node in nodes:
+                        if not node:  # Skip null nodes
+                            continue
+                        
+                        prs_processed += 1
+                        reviews = self._parse_graphql_reviews(node, username)
+                        for review_data in reviews:
+                            # Filter by date range
+                            if self._in_date_range(review_data.submitted_at):
+                                data.reviews.append(review_data)
+                                total_reviews += 1
+                    
+                    if console:
+                        console.print(f"  [dim]Processed {prs_processed} PRs, found {total_reviews} reviews (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
+                    
+                    # Check for more pages
+                    if page_info.get("hasNextPage"):
+                        cursor = page_info.get("endCursor")
+                    else:
+                        break
+            
+            if console:
+                console.print(f"  [dim]Processed {prs_processed} reviewed PRs, found {total_reviews} reviews via GraphQL          [/dim]")
+            
+            return True
+            
+        except Exception as e:
+            if console:
+                console.print(f"  [dim]GraphQL failed for reviews, falling back to REST: {e}[/dim]")
+            return False
+
+    def _parse_graphql_pr(self, node: dict, is_author: bool) -> PullRequestData | None:
+        """Parse a GraphQL PR node into PullRequestData."""
+        try:
+            repo = node.get("repository", {})
+            labels_data = node.get("labels", {}).get("nodes", [])
+            
+            # Parse dates
+            created_at = self._parse_iso_datetime(node.get("createdAt"))
+            merged_at = self._parse_iso_datetime(node.get("mergedAt"))
+            
+            return PullRequestData(
+                number=node.get("number", 0),
+                title=node.get("title", ""),
+                body=node.get("body"),
+                repo_name=repo.get("name", ""),
+                repo_full_name=repo.get("nameWithOwner", ""),
+                url=node.get("url", ""),
+                state=node.get("state", "").lower(),
+                merged=node.get("merged", False),
+                created_at=created_at,
+                merged_at=merged_at,
+                additions=node.get("additions", 0),
+                deletions=node.get("deletions", 0),
+                changed_files=node.get("changedFiles", 0),
+                labels=[label.get("name", "") for label in labels_data if label],
+                is_author=is_author,
+            )
+        except Exception:
+            return None
+
+    def _parse_graphql_reviews(self, node: dict, username: str) -> list[ReviewData]:
+        """Parse GraphQL PR node with reviews into list of ReviewData."""
+        results = []
+        try:
+            repo = node.get("repository", {})
+            author_data = node.get("author", {})
+            reviews_data = node.get("reviews", {}).get("nodes", [])
+            
+            pr_number = node.get("number", 0)
+            pr_title = node.get("title", "")
+            repo_name = repo.get("name", "")
+            repo_full_name = repo.get("nameWithOwner", "")
+            pr_url = node.get("url", "")
+            pr_author = author_data.get("login", "unknown") if author_data else "unknown"
+            
+            for review in reviews_data:
+                if not review:
+                    continue
+                
+                submitted_at = self._parse_iso_datetime(review.get("submittedAt"))
+                if not submitted_at:
+                    continue
+                
+                results.append(ReviewData(
+                    pr_number=pr_number,
+                    pr_title=pr_title,
+                    repo_name=repo_name,
+                    repo_full_name=repo_full_name,
+                    pr_url=pr_url,
+                    submitted_at=submitted_at,
+                    state=review.get("state", ""),
+                    author=pr_author,
+                ))
+        except Exception:
+            pass
+        
+        return results
+
+    def _parse_iso_datetime(self, dt_str: str | None) -> datetime | None:
+        """Parse an ISO datetime string from GraphQL."""
+        if not dt_str:
+            return None
+        try:
+            # Handle ISO format with Z suffix
+            if dt_str.endswith("Z"):
+                dt_str = dt_str[:-1] + "+00:00"
+            dt = datetime.fromisoformat(dt_str)
+            # Remove timezone info to match existing behavior
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            return dt
+        except Exception:
+            return None
+
+    # =========================================================================
+    # REST-based fetch methods (fallback)
+    # =========================================================================
 
     def _fetch_pr_details_parallel(
         self, issues: list[Issue], is_author: bool, console: Console | None = None
