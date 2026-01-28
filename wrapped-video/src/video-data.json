@@ -1,126 +1,116 @@
 {
   "heroStats": {
-    "prsMerged": 207,
-    "linesAdded": 133515,
-    "linesRemoved": 8226,
-    "reviewsGiven": 269,
+    "prsMerged": 89,
+    "linesAdded": 176768,
+    "linesRemoved": 101483,
+    "reviewsGiven": 320,
     "repositoriesContributed": 5
   },
   "funFacts": [
     {
-      "label": "Peak PR quarter",
-      "value": 77,
-      "detail": "Q1 came out swinging—launch energy plus rapid-fire fixes set the pace for the year."
+      "label": "Biggest Code Avalanche",
+      "value": 144985,
+      "detail": "One PR in dl_object_detection rewired the shard Docker image with +79,101/-65,884 lines—an entire mountain range of change."
     },
     {
-      "label": "The mega-PR moment",
-      "value": 91763,
-      "detail": "One PR in media_analyzer shipped Capsule async support (+89325/-2438)—an actual feature saga in a single merge."
+      "label": "Q4 Turbo Mode",
+      "value": 40,
+      "detail": "Almost half your PRs landed in Q4 (40/89) — end-of-year shipping streak unlocked."
     },
     {
-      "label": "Review machine",
-      "value": 269,
-      "detail": "You didn’t just ship code—you unblocked the team all year with a steady stream of approvals and sharp comments."
+      "label": "The Review Machine",
+      "value": 320,
+      "detail": "You were the team’s merge-lane traffic controller: 320 reviews, including 111 for @ylavi-cloudinary and 60 for @aviadmx."
     },
     {
-      "label": "Top teammate boost",
-      "value": 47,
-      "detail": "Most-reviewed collaborator: @cloudinary-pkoniu (47 reviews). Certified “I’ve got you” energy."
+      "label": "Largest PR by Files Touched",
+      "value": 1083,
+      "detail": "The Git LFS migration in dl_object_detection touched 1,083 files—clean hands, dirty repo."
     },
     {
-      "label": "Low-churn, high-impact",
-      "value": 16217,
-      "detail": "Net code growth of 125,289 lines (133,515 added minus 8,226 removed): big builds, minimal thrash."
+      "label": "Build & Deploy Whisperer",
+      "value": 4,
+      "detail": "You repeatedly tuned Jenkins checkout/LFS/shallow clone flows—keeping CI fast, reliable, and drama-free across multiple PRs."
     }
   ],
   "bigRocks": [
     {
-      "title": "Capsule Goes Async (The Big Bang)",
-      "repo": "media_analyzer",
-      "impact": "Delivered true asynchronous analysis support for AI Vision + Captioning, unlocking scalable async workflows end-to-end.",
-      "linesChanged": 91763
+      "title": "Shard Docker Megalift",
+      "repo": "dl_object_detection",
+      "impact": "Modernized the shard Docker stack at scale, unblocking smoother builds and deployments for the model pipeline.",
+      "linesChanged": 144985
     },
     {
-      "title": "Captain Crash Gets a Brain (GPT + Context)",
-      "repo": "captain-crash-lambda",
-      "impact": "Turned incident reporting into a smarter assistant by adding GPT capabilities and richer context providers (Rollbar/Coralogix/ArgoCD).",
-      "linesChanged": 16982
+      "title": "Teacher Data Agent: Factory Mode",
+      "repo": "dl_research",
+      "impact": "Built a production-ready teacher-data generation pipeline with rate limiting, checkpointing, and cost estimation for VLM distillation.",
+      "linesChanged": 14668
     },
     {
-      "title": "New Analysis Powers: Watermark + IQA",
-      "repo": "media_analyzer",
-      "impact": "Expanded the platform’s analysis catalog with Watermark Detection and IQA, setting up new product capabilities.",
-      "linesChanged": 3719
+      "title": "Training Infra: Student VLM Bootcamp",
+      "repo": "dl_research",
+      "impact": "Delivered end-to-end training infrastructure (LoRA, callbacks, tests) to make distillation training reliable and repeatable.",
+      "linesChanged": 8601
     },
     {
-      "title": "Async Responses on S3 (Results, Delivered)",
-      "repo": "media_analyzer",
-      "impact": "Moved async responses to S3 for reliability and scale, reducing pressure on synchronous pathways.",
-      "linesChanged": 2042
+      "title": "VQA Structured Output Upgrade",
+      "repo": "dl_object_detection",
+      "impact": "Added structured output support (schema extraction + tool-use parameters) to make VQA responses machine-parseable and robust.",
+      "linesChanged": 711
     },
     {
-      "title": "Permission Fortress Upgrades",
-      "repo": "cloudinary",
-      "impact": "Strengthened DAM and API permissions enforcement across folders, assets, and resource endpoints—safer defaults, fewer foot-guns.",
-      "linesChanged": 3443
+      "title": "Logo Recognition Enters the Chat",
+      "repo": "dl_object_detection",
+      "impact": "Introduced a full logo-recognition capability (detector + embedder + utilities + tests) to expand content analysis power.",
+      "linesChanged": 2943
     }
   ],
   "quarterlyActivity": [
     {
       "quarter": "Q1",
-      "prs": 77,
-      "highlights": "Big launches kicked off early—new analysis types, prompt engineering, and the Captain Crash foundation sprint."
+      "prs": 17,
+      "highlights": "Early-year foundation work: mocking/test stability and steady dl_utils bumps to keep pipelines healthy."
     },
     {
       "quarter": "Q2",
-      "prs": 40,
-      "highlights": "Permissions season in cloudinary: enforcement, API correctness, and performance-minded fixes."
+      "prs": 7,
+      "highlights": "Precision quarter: super-res transparency fixes and RealESRGANer refactors that made edge cases behave."
     },
     {
       "quarter": "Q3",
-      "prs": 24,
-      "highlights": "Stability arc: edge-case fixes, smarter uploads (HttpSource), and tightening customer-facing errors."
+      "prs": 25,
+      "highlights": "Feature wave: OpenAI logprobs + confidence scoring, Flux txt2img adventures, and model upgrades landing fast."
     },
     {
       "quarter": "Q4",
-      "prs": 66,
-      "highlights": "Year-end turbo mode—Capsule async landed, infra scaling tuned, and dl_object_detection reliability upgrades shipped."
+      "prs": 40,
+      "highlights": "Full send: LFS + Jenkins tune-ups, new models (Logo Recognition), and the dl_research distillation pipeline coming online."
     }
   ],
   "topRepos": [
     {
-      "name": "cloudinary",
-      "prs": 45,
-      "funFact": "Home base for permissions hardening—folders, assets, metadata, and API endpoints all got safer and sharper."
-    },
-    {
-      "name": "media_analyzer",
-      "prs": 44,
-      "funFact": "The ‘big build’ repo: from prompt engineering to async S3 pipelines to the massive Capsule async leap."
-    },
-    {
-      "name": "captain-crash-lambda",
-      "prs": 35,
-      "funFact": "From zero to incident sidekick—context collectors, Slack ergonomics, and GPT-driven summaries."
-    },
-    {
       "name": "dl_object_detection",
-      "prs": 31,
-      "funFact": "Reliability & ops glow-up: graceful ECS shutdown, CloudWatch metrics reporting, and e2e stabilization."
+      "prs": 67,
+      "funFact": "Your main arena: from VQA confidence scoring to CI/LFS migrations—this repo got the blockbuster treatment."
     },
     {
-      "name": "mms-infra",
-      "prs": 12,
-      "funFact": "Quiet but critical: scaling rules, shard capacity tuning, and container dependency ordering for safer deploys."
+      "name": "dl_utils",
+      "prs": 13,
+      "funFact": "The reliability engine room: BrushNet training pipeline, TRT10 updates, and a steady stream of performance-minded fixes."
+    },
+    {
+      "name": "dl_research",
+      "prs": 4,
+      "funFact": "Small PR count, massive impact: you stood up the distillation data + training infrastructure in a single Q4 surge."
     }
   ],
   "yearInReview": {
-    "headline": "The Year of Async & Reliability",
-    "tagline": "207 PRs merged, 133,515 lines added, 269 reviews—shipping big features while keeping systems calm under pressure."
+    "headline": "The Year of Shipping (and Shepherding)",
+    "tagline": "89 PRs merged, 176,768 lines added, 320 reviews—big model features, bigger infra, and a whole lot of team unblock."
   },
   "meta": {
-    "username": "adilester",
+    "username": "davidas1",
     "year": 2025,
-    "generatedAt": "2026-01-28T18:28:45.734041"
+    "generatedAt": "2026-01-28T19:15:21.885327"
   }
 }

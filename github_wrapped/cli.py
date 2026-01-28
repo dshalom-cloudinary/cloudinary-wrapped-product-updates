@@ -25,7 +25,7 @@ console = Console()
 @app.command()
 def main(
     orgs: str = typer.Option(
-        None,
+        "CloudinaryLtd",
         "--orgs",
         "-o",
         help="Comma-separated list of GitHub organizations to fetch from. Required unless using --from-file.",

@@ -85,6 +85,30 @@ query($searchQuery: String!, $username: String!, $cursor: String) {
 }
 """
 
+# GraphQL query for fetching top repositories a user contributed to
+# Returns repos with merged PR counts for ranking
+TOP_REPOS_GRAPHQL = """
+query($searchQuery: String!, $cursor: String) {
+  search(query: $searchQuery, type: ISSUE, first: 100, after: $cursor) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      ... on PullRequest {
+        repository {
+          name
+          nameWithOwner
+          owner {
+            login
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 
 @dataclass
 class PullRequestData:
@@ -295,6 +319,9 @@ class DataFetcher:
     avoiding the need to fetch all PRs and filter locally.
     """
 
+    # Number of top repos to fetch when no specific repos are provided
+    DEFAULT_TOP_REPOS_COUNT = 5
+
     def __init__(
         self,
         client: GitHubClient,
@@ -311,7 +338,8 @@ class DataFetcher:
             year: The year to fetch data for.
             orgs: List of organization names to fetch from.
             repos: Optional list of specific repository names to fetch from.
-                   If None, fetches from all repos in the organizations.
+                   If None, automatically discovers the top 5 repos the user
+                   contributed to in the specified organizations.
             target_username: GitHub username to fetch data for. If None, uses
                    the authenticated user's username.
         """
@@ -319,6 +347,7 @@ class DataFetcher:
         self.year = year
         self.orgs = orgs
         self.repos = repos  # Keep as list for search queries
+        self._discovered_repos: list[str] | None = None  # Cache for auto-discovered repos
         self.target_username = target_username or client.username
         self.start_date = datetime(year, 1, 1)
         self.end_date = datetime(year, 12, 31, 23, 59, 59)
@@ -327,16 +356,96 @@ class DataFetcher:
 
     def _build_scope_query(self) -> str:
         """Build the scope portion of search queries (org/repo filters)."""
-        if self.repos:
+        # Use discovered repos if available, otherwise use provided repos
+        repos_to_use = self._discovered_repos or self.repos
+        
+        if repos_to_use:
             # Specific repos: use repo:org/repo for each combination
             repo_queries = []
             for org in self.orgs:
-                for repo in self.repos:
+                for repo in repos_to_use:
                     repo_queries.append(f"repo:{org}/{repo}")
             return " ".join(repo_queries)
         else:
             # All repos in orgs: use org:name for each
             return " ".join(f"org:{org}" for org in self.orgs)
+
+    def _discover_top_repos(
+        self, username: str, console: Console | None = None
+    ) -> list[str]:
+        """
+        Discover the top repositories the user contributed to using GraphQL.
+        
+        Fetches merged PRs authored by the user in the specified orgs and year,
+        then ranks repositories by contribution count.
+        
+        Args:
+            username: GitHub username to find contributions for.
+            console: Optional Rich console for status updates.
+            
+        Returns:
+            List of repository names (without org prefix) sorted by contribution count.
+        """
+        from collections import Counter
+        
+        if console:
+            console.print(f"  [dim]Discovering top repositories for {username}...[/dim]")
+        
+        # Build org scope for the search
+        org_scope = " ".join(f"org:{org}" for org in self.orgs)
+        
+        # Search for all merged PRs by this user in the orgs for the year
+        search_query = (
+            f"type:pr author:{username} is:merged "
+            f"merged:{self.start_date_str}..{self.end_date_str} {org_scope}"
+        )
+        
+        repo_contributions: Counter = Counter()
+        cursor = None
+        total_prs = 0
+        
+        while True:
+            result = self.client.execute_graphql(
+                TOP_REPOS_GRAPHQL,
+                variables={"searchQuery": search_query, "cursor": cursor}
+            )
+            
+            search_data = result.get("search", {})
+            nodes = search_data.get("nodes", [])
+            page_info = search_data.get("pageInfo", {})
+            
+            for node in nodes:
+                if not node:
+                    continue
+                
+                repo = node.get("repository", {})
+                repo_name = repo.get("name", "")
+                owner = repo.get("owner", {}).get("login", "")
+                
+                # Only count repos from our target orgs
+                if owner in self.orgs and repo_name:
+                    repo_contributions[repo_name] += 1
+                    total_prs += 1
+            
+            if console:
+                console.print(f"  [dim]Processed {total_prs} PRs...[/dim]", end="\r")
+            
+            # Check for more pages
+            if page_info.get("hasNextPage"):
+                cursor = page_info.get("endCursor")
+            else:
+                break
+        
+        # Get top N repos by contribution count
+        top_repos = [repo for repo, _ in repo_contributions.most_common(self.DEFAULT_TOP_REPOS_COUNT)]
+        
+        if console:
+            if top_repos:
+                console.print(f"  [dim]Found top {len(top_repos)} repos from {total_prs} PRs: {', '.join(top_repos)}[/dim]")
+            else:
+                console.print(f"  [dim]No contributions found in specified organizations[/dim]")
+        
+        return top_repos
 
     def fetch_all(
         self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False
@@ -360,9 +469,20 @@ class DataFetcher:
 
         username = self.target_username
 
+        # If no specific repos provided, discover top repos the user contributed to
+        if not self.repos:
+            if console:
+                console.print(f"  [dim]No specific repos provided, discovering top {self.DEFAULT_TOP_REPOS_COUNT} repos...[/dim]")
+            self._discovered_repos = self._discover_top_repos(username, console)
+            if not self._discovered_repos:
+                if console:
+                    console.print(f"  [yellow]Warning:[/yellow] No contributions found in the specified organizations for {self.year}")
+                return data
+
         if console:
-            if self.repos:
-                console.print(f"  [dim]Searching in {len(self.repos)} repo(s) across {len(self.orgs)} org(s)[/dim]")
+            repos_to_show = self._discovered_repos or self.repos
+            if repos_to_show:
+                console.print(f"  [dim]Searching in {len(repos_to_show)} repo(s) across {len(self.orgs)} org(s)[/dim]")
             else:
                 console.print(f"  [dim]Searching across all repos in {len(self.orgs)} org(s)[/dim]")
             console.print(f"  [dim]Using GraphQL API for efficient fetching[/dim]")
@@ -469,14 +589,17 @@ class DataFetcher:
         """
         Get list of scope queries for GraphQL.
         
-        When specific repos are requested, returns one scope per repo to query separately.
+        When specific repos are requested (or discovered), returns one scope per repo to query separately.
         When fetching all repos in orgs, returns one scope per org.
         """
-        if self.repos:
+        # Use discovered repos if available, otherwise use provided repos
+        repos_to_use = self._discovered_repos or self.repos
+        
+        if repos_to_use:
             # Query each repo separately to avoid query length issues
             scopes = []
             for org in self.orgs:
-                for repo in self.repos:
+                for repo in repos_to_use:
                     scopes.append(f"repo:{org}/{repo}")
             return scopes
         else:

@@ -1,6 +1,7 @@
 """GitHub API client wrapper with authentication."""
 
 import os
+import sys
 import time
 from typing import Any
 
@@ -16,9 +17,11 @@ from .device_auth import authenticate_with_device_flow, DeviceFlowError
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 
 # GraphQL retry settings
-GRAPHQL_MAX_RETRIES = 3
-GRAPHQL_INITIAL_BACKOFF = 1.0  # seconds
+GRAPHQL_MAX_RETRIES = 5
+GRAPHQL_INITIAL_BACKOFF = 2.0  # seconds
+GRAPHQL_MAX_BACKOFF = 30.0  # seconds (cap exponential backoff)
 GRAPHQL_TIMEOUT = 60  # seconds
+GRAPHQL_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}  # Server errors worth retrying
 
 
 class GitHubClient:
@@ -152,6 +155,21 @@ class GitHubClient:
                     json=payload,
                     timeout=GRAPHQL_TIMEOUT,
                 )
+                
+                # Check for retryable server errors before raising
+                if response.status_code in GRAPHQL_RETRYABLE_STATUS_CODES:
+                    if attempt < GRAPHQL_MAX_RETRIES - 1:
+                        print(
+                            f"  [Retry {attempt + 1}/{GRAPHQL_MAX_RETRIES}] "
+                            f"GitHub API returned {response.status_code}, retrying in {backoff:.1f}s...",
+                            file=sys.stderr
+                        )
+                        time.sleep(backoff)
+                        backoff = min(backoff * 2, GRAPHQL_MAX_BACKOFF)
+                        continue
+                    # Last attempt, raise the error
+                    response.raise_for_status()
+                
                 response.raise_for_status()
 
                 result = response.json()
@@ -166,9 +184,13 @@ class GitHubClient:
             except (requests.RequestException, requests.exceptions.ChunkedEncodingError) as e:
                 last_exception = e
                 if attempt < GRAPHQL_MAX_RETRIES - 1:
-                    # Wait before retrying with exponential backoff
+                    print(
+                        f"  [Retry {attempt + 1}/{GRAPHQL_MAX_RETRIES}] "
+                        f"Request error: {e}, retrying in {backoff:.1f}s...",
+                        file=sys.stderr
+                    )
                     time.sleep(backoff)
-                    backoff *= 2
+                    backoff = min(backoff * 2, GRAPHQL_MAX_BACKOFF)
                     continue
                 raise
         
