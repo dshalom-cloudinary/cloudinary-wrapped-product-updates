@@ -558,7 +558,7 @@ Generate the video data JSON as specified in the system prompt."""
             "generatedAt": datetime.now().isoformat(),
         }
         
-        filename = f"video-data-{self.data.year}.json"
+        filename = f"video-data-{self.data.year}-{int(datetime.now().timestamp())}.json"
         filepath = output_path / filename
         filepath.write_text(json.dumps(video_data, indent=2))
         

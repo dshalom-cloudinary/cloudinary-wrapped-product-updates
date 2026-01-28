@@ -38,3 +38,6 @@ output/*
 # OS
 .DS_Store
 Thumbs.db
+
+*.mp4
+node_modules/

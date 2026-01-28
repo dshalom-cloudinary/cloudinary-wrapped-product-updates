@@ -1,0 +1,111 @@
+{
+  "heroStats": {
+    "prsMerged": 117,
+    "linesAdded": 123874,
+    "linesRemoved": 5442,
+    "reviewsGiven": 19,
+    "repositoriesContributed": 2
+  },
+  "funFacts": [
+    {
+      "label": "Main Character Quarter",
+      "value": "64 PRs in Q1",
+      "detail": "You came out of the gates sprinting\u2014more than half your year\u2019s PRs landed in Q1, setting the pace for everything that followed."
+    },
+    {
+      "label": "The Mega-PR Moment",
+      "value": "+89,325 / -2,438",
+      "detail": "\u201cCapsule async support\u201d rewired Media Analyzer at scale\u2014217 files touched and a whole new async path unlocked."
+    },
+    {
+      "label": "Async Everywhere",
+      "value": "Multiple async-focused launches",
+      "detail": "From Capsule async support to \u201cGet async responses on S3\u201d (+1,854/-188), 2025 was the year you made async feel inevitable."
+    },
+    {
+      "label": "Rapid-Fire Reviewer",
+      "value": "13 reviews for @meirbech",
+      "detail": "You were the go-to teammate\u2014approvals, comments, and unblock energy across the busiest threads."
+    },
+    {
+      "label": "The Revert-to-Ship Combo",
+      "value": "3 chart PRs + a revert",
+      "detail": "When charts got spicy, you didn\u2019t flinch\u2014revert, reapply, and land the right version (the true DevOps waltz)."
+    }
+  ],
+  "bigRocks": [
+    {
+      "title": "Async Awakening (Capsule Edition)",
+      "repo": "media_analyzer",
+      "impact": "Introduced true async analysis for AI Vision + Captioning by switching to Capsule AsyncSend and building the plumbing to route results back safely.",
+      "linesChanged": 91763
+    },
+    {
+      "title": "Crash Reporter: ArgoCD Context Upgrade",
+      "repo": "captain-crash-lambda",
+      "impact": "Taught Captain Crash to pull deployment intelligence from ArgoCD, making incident reports instantly more actionable.",
+      "linesChanged": 1217
+    },
+    {
+      "title": "Internal Fast Lane: Billing Bypass",
+      "repo": "media_analyzer",
+      "impact": "Enabled internal services to bypass billing via header-based logic\u2014speeding internal workflows without burning quota.",
+      "linesChanged": 1069
+    },
+    {
+      "title": "Prompt Engineering Launchpad",
+      "repo": "media_analyzer",
+      "impact": "Shipped the AI Vision Tag Generation prompt engineering service and the underlying model, turning prompts into a first-class feature.",
+      "linesChanged": 2260
+    },
+    {
+      "title": "Captain GPT Takes the Helm",
+      "repo": "captain-crash-lambda",
+      "impact": "Brought GPT-powered summarization into the crash pipeline, including initializers and data stitching for clearer, faster triage.",
+      "linesChanged": 837
+    }
+  ],
+  "quarterlyActivity": [
+    {
+      "quarter": "Q1",
+      "prs": 64,
+      "highlights": "Captain Crash came to life: Slack command integration, GPT foundations, Rollbar/Coralogix wiring, and a flurry of reliability fixes."
+    },
+    {
+      "quarter": "Q2",
+      "prs": 21,
+      "highlights": "Sharper incident signal: alert filtering, prompt tuning, and deployment context improvements\u2014less noise, more truth."
+    },
+    {
+      "quarter": "Q3",
+      "prs": 11,
+      "highlights": "Platform polish and permissions: S3 access work, validations, and targeted fixes that kept the pipeline steady."
+    },
+    {
+      "quarter": "Q4",
+      "prs": 21,
+      "highlights": "Async endgame: big Capsule async landing, S3 async responses, and the final run of stability + chart iterations to ship clean."
+    }
+  ],
+  "topRepos": [
+    {
+      "name": "media_analyzer",
+      "prs": 60,
+      "funFact": "Home of the year\u2019s biggest swing: \u201cCapsule async support\u201d touched 217 files and changed how analysis works at scale."
+    },
+    {
+      "name": "captain-crash-lambda",
+      "prs": 57,
+      "funFact": "From basic structure to a GPT-assisted incident companion\u2014Slack, Rollbar, Coralogix, and ArgoCD context all leveled up."
+    }
+  ],
+  "yearInReview": {
+    "headline": "The Year of Async & Incident Clarity",
+    "tagline": "117 PRs merged, 123874 lines added, and two repos transformed: Media Analyzer went truly async while Captain Crash got smarter, louder, and more actionable."
+  },
+  "meta": {
+    "username": "adilester",
+    "year": 2025,
+    "generatedAt": "2026-01-28T11:59:52.435266"
+  }
+}
