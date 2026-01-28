@@ -6,10 +6,7 @@ import requests
 from rich.console import Console
 
 # GitHub OAuth App credentials
-# Note: For production, you should register your own OAuth App at:
-# https://github.com/settings/applications/new
-# These are placeholder values - replace with your actual Client ID
-GITHUB_CLIENT_ID = "YOUR_CLIENT_ID"  # TODO: Replace with actual Client ID
+GITHUB_CLIENT_ID = "Ov23liTzk9ELYZzdw736"
 
 DEVICE_CODE_URL = "https://github.com/login/device/code"
 ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"

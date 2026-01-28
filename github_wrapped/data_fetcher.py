@@ -129,23 +129,36 @@ class DataFetcher:
             orgs=self.orgs,
         )
 
-        # Collect all repos from all orgs
+        # Collect repos to scan
         all_repos: list[Repository] = []
-        for org_name in self.orgs:
-            if console:
-                console.print(f"  [dim]Discovering repos in {org_name}...[/dim]")
-            org_repos = self.client.get_org_repos(org_name)
-            all_repos.extend(org_repos)
 
-        # Filter to specific repos if specified
         if self.repos:
-            all_repos = [r for r in all_repos if r.name in self.repos]
+            # Specific repos requested - fetch them directly (much faster)
+            for org_name in self.orgs:
+                for repo_name in self.repos:
+                    try:
+                        repo = self.client.get_repo(org_name, repo_name)
+                        all_repos.append(repo)
+                        if console:
+                            console.print(f"  [dim]Found {org_name}/{repo_name}[/dim]")
+                    except ValueError:
+                        # Repo doesn't exist in this org, skip silently
+                        pass
+        else:
+            # No specific repos - discover all repos in orgs
+            for org_name in self.orgs:
+                if console:
+                    console.print(f"  [dim]Discovering repos in {org_name}...[/dim]")
+                org_repos = self.client.get_org_repos(org_name)
+                all_repos.extend(org_repos)
+            if console:
+                console.print(f"  [dim]Found {len(all_repos)} repos to scan[/dim]")
 
         if not all_repos:
             return data
 
         if console:
-            console.print(f"  [dim]Found {len(all_repos)} repos to scan[/dim]\n")
+            console.print("")
 
         # Create progress task if provided
         task: TaskID | None = None

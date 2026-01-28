@@ -66,6 +66,27 @@ class GitHubClient:
                 raise ValueError(f"Organization '{org_name}' not found or not accessible.")
             raise
 
+    def get_repo(self, org_name: str, repo_name: str):
+        """
+        Get a specific repository by org and name.
+
+        Args:
+            org_name: The organization name.
+            repo_name: The repository name.
+
+        Returns:
+            Repository object.
+
+        Raises:
+            ValueError: If the repository is not found or not accessible.
+        """
+        try:
+            return self.client.get_repo(f"{org_name}/{repo_name}")
+        except GithubException as e:
+            if e.status == 404:
+                raise ValueError(f"Repository '{org_name}/{repo_name}' not found or not accessible.")
+            raise
+
     def verify_connection(self) -> bool:
         """
         Verify that the GitHub connection works.
