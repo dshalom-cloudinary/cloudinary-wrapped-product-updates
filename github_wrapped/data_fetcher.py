@@ -128,7 +128,7 @@ class ContributionData:
             The path to the saved file.
         """
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"github_data_{self.username}_{self.year}.json"
+        filename = f"github_data_{self.username}_{self.year}_{int(datetime.now().timestamp())}.json"
         filepath = os.path.join(output_dir, filename)
 
         with open(filepath, "w", encoding="utf-8") as f:

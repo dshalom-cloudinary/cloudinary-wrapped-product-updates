@@ -1,6 +1,5 @@
 """LLM-powered report generator for performance reviews."""
 
-import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -9,8 +8,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from .categorizer import CategorizedData, CategorizedPR, PRCategory
-from .data_fetcher import ContributionData, ReviewData
+from .data_fetcher import ContributionData, PullRequestData
 
 
 # Performance review framework definitions
@@ -55,16 +53,36 @@ Keep balance between high work ethics and personal life.
 SYSTEM_PROMPT = """You are an expert performance review writer helping an engineer prepare their annual performance review self-assessment.
 
 You will be given detailed GitHub contribution data for a year, including:
-- Pull requests authored (with descriptions, size, and impact indicators)
+- Pull requests authored (with titles, descriptions, size, and labels)
 - Code reviews given to teammates
 - Commits made
 - Repository and project distribution
 
-Your task is to write a compelling, evidence-based performance review that addresses both Execution and Culture aspects of the performance framework.
+Your task is to:
+1. **Analyze and categorize** the contributions (features, bug fixes, infrastructure/DevOps, documentation, refactoring, tests, etc.)
+2. **Identify "big rocks"** - major accomplishments that had significant impact (large scope, strategic importance, or notable complexity)
+3. **Write a compelling, evidence-based performance review** that addresses both Execution and Culture aspects of the performance framework
 
 {execution_framework}
 
 {culture_framework}
+
+## Guidelines for Categorization
+
+When categorizing PRs, consider:
+- **Features**: New functionality, capabilities, or user-facing improvements
+- **Bug Fixes**: Corrections to existing functionality, resolving issues
+- **Infrastructure/DevOps**: CI/CD, deployment, monitoring, tooling, automation
+- **Documentation**: README updates, API docs, code comments, guides
+- **Refactoring**: Code cleanup, restructuring, optimization without changing behavior
+- **Tests**: Unit tests, integration tests, test infrastructure
+
+When identifying "big rocks" (major accomplishments), look for:
+- Large PRs (many files changed, significant lines added/deleted)
+- Strategic initiatives mentioned in descriptions
+- Work that spans multiple areas or enables other work
+- Migration, platform, or architecture changes
+- Launches, releases, or significant milestones
 
 ## Guidelines for Writing
 
@@ -108,16 +126,8 @@ class ContributionSummary:
     total_deletions: int
     repositories_contributed_to: list[str]
     
-    # Categorized work
-    features: list[dict]
-    bugfixes: list[dict]
-    infrastructure: list[dict]
-    documentation: list[dict]
-    refactors: list[dict]
-    tests: list[dict]
-    
-    # High-impact work
-    big_rocks: list[dict]
+    # All PRs (uncategorized - LLM will categorize)
+    pull_requests: list[dict]
     
     # Collaboration metrics
     teammates_reviewed: dict[str, int]  # teammate -> review count
@@ -159,82 +169,26 @@ class ContributionSummary:
             lines.append(f"- ... and {len(self.repositories_contributed_to) - 10} more")
         lines.append("")
         
-        # Big rocks / major accomplishments
-        if self.big_rocks:
-            lines.append("## Major Accomplishments (Big Rocks)")
-            for pr in self.big_rocks:
-                lines.append(f"\n### {pr['title']}")
-                lines.append(f"- Repository: {pr['repo']}")
-                lines.append(f"- Date: {pr['date']}")
-                lines.append(f"- Size: +{pr['additions']}/-{pr['deletions']} in {pr['changed_files']} files")
-                lines.append(f"- Impact Reason: {pr['big_rock_reason']}")
-                if pr.get('description'):
-                    # Truncate very long descriptions
-                    desc = pr['description'][:500]
-                    if len(pr['description']) > 500:
-                        desc += "..."
-                    lines.append(f"- Description: {desc}")
-                lines.append(f"- URL: {pr['url']}")
-            lines.append("")
+        # All pull requests - LLM will analyze and categorize these
+        lines.append("## Pull Requests (for you to analyze and categorize)")
+        lines.append("")
+        lines.append("Please analyze each PR to identify its category (feature, bugfix, infrastructure, documentation, refactor, test, or other) and whether it's a 'big rock' (major accomplishment).")
+        lines.append("")
         
-        # Features
-        if self.features:
-            lines.append("## Features Delivered")
-            for pr in self.features[:15]:  # Limit to avoid token overflow
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']}) - +{pr['additions']}/-{pr['deletions']}")
-                if pr.get('description'):
-                    desc = pr['description'][:200]
-                    lines.append(f"  Description: {desc}")
-            if len(self.features) > 15:
-                lines.append(f"- ... and {len(self.features) - 15} more features")
-            lines.append("")
-        
-        # Bugfixes
-        if self.bugfixes:
-            lines.append("## Bug Fixes")
-            for pr in self.bugfixes[:10]:
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']})")
-            if len(self.bugfixes) > 10:
-                lines.append(f"- ... and {len(self.bugfixes) - 10} more bug fixes")
-            lines.append("")
-        
-        # Infrastructure
-        if self.infrastructure:
-            lines.append("## Infrastructure & DevOps")
-            for pr in self.infrastructure[:10]:
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']})")
-                if pr.get('description'):
-                    desc = pr['description'][:150]
-                    lines.append(f"  Description: {desc}")
-            if len(self.infrastructure) > 10:
-                lines.append(f"- ... and {len(self.infrastructure) - 10} more")
-            lines.append("")
-        
-        # Refactors and quality improvements
-        if self.refactors:
-            lines.append("## Refactoring & Quality Improvements")
-            for pr in self.refactors[:10]:
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']})")
-            if len(self.refactors) > 10:
-                lines.append(f"- ... and {len(self.refactors) - 10} more")
-            lines.append("")
-        
-        # Tests
-        if self.tests:
-            lines.append("## Testing")
-            for pr in self.tests[:10]:
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']})")
-            if len(self.tests) > 10:
-                lines.append(f"- ... and {len(self.tests) - 10} more")
-            lines.append("")
-        
-        # Documentation
-        if self.documentation:
-            lines.append("## Documentation")
-            for pr in self.documentation[:10]:
-                lines.append(f"- [{pr['date']}] {pr['title']} ({pr['repo']})")
-            if len(self.documentation) > 10:
-                lines.append(f"- ... and {len(self.documentation) - 10} more")
+        for i, pr in enumerate(self.pull_requests, 1):
+            lines.append(f"### PR {i}: {pr['title']}")
+            lines.append(f"- Repository: {pr['repo']}")
+            lines.append(f"- Date: {pr['date']}")
+            lines.append(f"- Size: +{pr['additions']}/-{pr['deletions']} in {pr['changed_files']} files")
+            if pr.get('labels'):
+                lines.append(f"- Labels: {', '.join(pr['labels'])}")
+            if pr.get('description'):
+                # Truncate very long descriptions
+                desc = pr['description'][:500]
+                if len(pr['description']) > 500:
+                    desc += "..."
+                lines.append(f"- Description: {desc}")
+            lines.append(f"- URL: {pr['url']}")
             lines.append("")
         
         # Code reviews / collaboration
@@ -260,11 +214,15 @@ class ContributionSummary:
 
 
 class LLMReportGenerator:
-    """Generates performance review reports using OpenAI."""
+    """Generates performance review reports using OpenAI.
+    
+    The LLM handles both categorization and report generation, providing
+    better contextual understanding than rule-based categorization.
+    """
     
     def __init__(
         self,
-        categorized_data: CategorizedData,
+        data: ContributionData,
         api_key: str | None = None,
         model: str = "gpt-5.2",
     ):
@@ -272,12 +230,11 @@ class LLMReportGenerator:
         Initialize the LLM report generator.
         
         Args:
-            categorized_data: Categorized contribution data.
+            data: Raw contribution data (uncategorized).
             api_key: OpenAI API key. If not provided, uses OPENAI_API_KEY env var.
             model: OpenAI model to use.
         """
-        self.data = categorized_data
-        self.raw = categorized_data.raw_data
+        self.data = data
         self.model = model
         
         # Initialize OpenAI client
@@ -291,10 +248,10 @@ class LLMReportGenerator:
     
     def _prepare_summary(self) -> ContributionSummary:
         """Prepare a structured summary of contributions for the LLM."""
+        merged_prs = self.data.merged_prs
         
-        def pr_to_dict(cp: CategorizedPR) -> dict:
-            """Convert a categorized PR to a dictionary."""
-            pr = cp.pr
+        def pr_to_dict(pr: PullRequestData) -> dict:
+            """Convert a PR to a dictionary for the LLM."""
             return {
                 "title": pr.title,
                 "description": pr.body,
@@ -305,18 +262,18 @@ class LLMReportGenerator:
                 "deletions": pr.deletions,
                 "changed_files": pr.changed_files,
                 "labels": pr.labels,
-                "category": cp.category.value,
-                "is_big_rock": cp.is_big_rock,
-                "big_rock_reason": cp.big_rock_reason,
             }
         
         # Calculate quarterly distribution
-        quarters = self.data.by_quarter()
-        quarterly_prs = {q: len(prs) for q, prs in quarters.items()}
+        quarterly_prs: dict[str, int] = defaultdict(int)
+        for pr in merged_prs:
+            date = pr.merged_at or pr.created_at
+            quarter = f"Q{(date.month - 1) // 3 + 1}"
+            quarterly_prs[quarter] += 1
         
         # Teammates reviewed
         teammates_reviewed: dict[str, int] = defaultdict(int)
-        for review in self.raw.reviews:
+        for review in self.data.reviews:
             teammates_reviewed[review.author] += 1
         
         # Review details
@@ -328,43 +285,44 @@ class LLMReportGenerator:
                 "state": r.state,
                 "date": r.submitted_at.strftime("%Y-%m-%d"),
             }
-            for r in self.raw.reviews
+            for r in self.data.reviews
         ]
         
         return ContributionSummary(
-            username=self.raw.username,
-            year=self.raw.year,
-            organizations=self.raw.orgs,
-            total_prs_merged=len(self.data.categorized_prs),
-            total_reviews_given=len(self.raw.reviews),
-            total_commits=len(self.raw.commits),
-            total_additions=sum(cp.pr.additions for cp in self.data.categorized_prs),
-            total_deletions=sum(cp.pr.deletions for cp in self.data.categorized_prs),
-            repositories_contributed_to=list(set(cp.pr.repo_name for cp in self.data.categorized_prs)),
-            features=[pr_to_dict(cp) for cp in self.data.features],
-            bugfixes=[pr_to_dict(cp) for cp in self.data.bugfixes],
-            infrastructure=[pr_to_dict(cp) for cp in self.data.infrastructure],
-            documentation=[pr_to_dict(cp) for cp in self.data.documentation],
-            refactors=[pr_to_dict(cp) for cp in self.data.refactors],
-            tests=[pr_to_dict(cp) for cp in self.data.tests],
-            big_rocks=[pr_to_dict(cp) for cp in self.data.big_rocks],
+            username=self.data.username,
+            year=self.data.year,
+            organizations=self.data.orgs,
+            total_prs_merged=len(merged_prs),
+            total_reviews_given=len(self.data.reviews),
+            total_commits=len(self.data.commits),
+            total_additions=sum(pr.additions for pr in merged_prs),
+            total_deletions=sum(pr.deletions for pr in merged_prs),
+            repositories_contributed_to=list(set(pr.repo_name for pr in merged_prs)),
+            pull_requests=[pr_to_dict(pr) for pr in merged_prs],
             teammates_reviewed=dict(teammates_reviewed),
             review_details=review_details,
-            quarterly_prs=quarterly_prs,
+            quarterly_prs=dict(quarterly_prs),
         )
     
     def generate(self) -> str:
-        """Generate the performance review report using the LLM."""
+        """Generate the performance review report using the LLM.
         
+        The LLM will analyze and categorize the PRs, identify major accomplishments,
+        and write a comprehensive performance review.
+        """
         # Prepare the data summary
         summary = self._prepare_summary()
         prompt_data = summary.to_prompt_data()
         
         # Build the user message
-        user_message = f"""Based on the following GitHub contribution data, write a comprehensive performance review self-assessment for {self.raw.year}.
+        user_message = f"""Based on the following GitHub contribution data, write a comprehensive performance review self-assessment for {self.data.year}.
 
 The review should address the question:
-"Please share your main accomplishments throughout {self.raw.year} in the aspects of execution and culture."
+"Please share your main accomplishments throughout {self.data.year} in the aspects of execution and culture."
+
+First, analyze each PR to understand its purpose and impact. Categorize them (feature, bugfix, infrastructure, documentation, refactor, test) and identify which ones are "big rocks" (major accomplishments).
+
+Then, use that analysis to write the performance review.
 
 Here is my GitHub contribution data:
 
@@ -393,44 +351,36 @@ Write a compelling, evidence-based performance review that I can use as a starti
     
     def _generate_header(self) -> str:
         """Generate the report header."""
-        return f"""# Performance Review Self-Assessment - {self.raw.year}
+        return f"""# Performance Review Self-Assessment - {self.data.year}
 
 **Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M")}
-**User:** {self.raw.username}
-**Organizations:** {", ".join(self.raw.orgs)}
+**User:** {self.data.username}
+**Organizations:** {", ".join(self.data.orgs)}
 
 ---
 
-*This report was generated using AI based on your GitHub contributions. Please review and customize it to accurately reflect your accomplishments and add context that may not be visible in the code.*
+*This report was generated using AI based on your GitHub contributions. The AI analyzed and categorized your PRs to identify themes and major accomplishments. Please review and customize it to accurately reflect your accomplishments and add context that may not be visible in the code.*
 
 ---"""
 
     def _generate_footer(self) -> str:
         """Generate the report footer with raw data reference."""
+        merged_prs = self.data.merged_prs
+        
         lines = ["---", "", "## Appendix: Raw Data Summary", ""]
         lines.append("| Metric | Count |")
         lines.append("|--------|-------|")
-        lines.append(f"| Pull Requests Merged | {len(self.data.categorized_prs)} |")
-        lines.append(f"| Big Rock Contributions | {len(self.data.big_rocks)} |")
-        lines.append(f"| Code Reviews Given | {len(self.raw.reviews)} |")
-        lines.append(f"| Commits | {len(self.raw.commits)} |")
+        lines.append(f"| Pull Requests Merged | {len(merged_prs)} |")
+        lines.append(f"| Code Reviews Given | {len(self.data.reviews)} |")
+        lines.append(f"| Commits | {len(self.data.commits)} |")
         
-        total_additions = sum(cp.pr.additions for cp in self.data.categorized_prs)
-        total_deletions = sum(cp.pr.deletions for cp in self.data.categorized_prs)
+        total_additions = sum(pr.additions for pr in merged_prs)
+        total_deletions = sum(pr.deletions for pr in merged_prs)
         lines.append(f"| Lines Added | {total_additions:,} |")
         lines.append(f"| Lines Removed | {total_deletions:,} |")
         
-        repos = set(cp.pr.repo_name for cp in self.data.categorized_prs)
+        repos = set(pr.repo_name for pr in merged_prs)
         lines.append(f"| Repositories | {len(repos)} |")
-        
-        # List big rocks for reference
-        if self.data.big_rocks:
-            lines.append("")
-            lines.append("### Major Contributions (Big Rocks)")
-            lines.append("")
-            for cp in self.data.big_rocks:
-                date = (cp.pr.merged_at or cp.pr.created_at).strftime("%Y-%m-%d")
-                lines.append(f"- [{cp.pr.title}]({cp.pr.url}) - {date} ({cp.pr.repo_name})")
         
         return "\n".join(lines)
     
@@ -447,7 +397,7 @@ Write a compelling, evidence-based performance review that I can use as a starti
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        filename = f"performance-review-{self.raw.year}-ai.md"
+        filename = f"performance-review-{self.data.year}-ai.md"
         filepath = output_path / filename
         
         report = self.generate()

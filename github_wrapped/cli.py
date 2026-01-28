@@ -184,13 +184,6 @@ def main(
         console.print("\n[yellow]Warning:[/yellow] No merged PRs found in the data.")
         raise typer.Exit(0)
 
-    # Categorize
-    console.print("\n[cyan]Analyzing contributions...[/cyan]")
-    categorizer = Categorizer()
-    categorized = categorizer.categorize(data)
-
-    console.print(f"[green]✓[/green] Identified {len(categorized.big_rocks)} big rocks")
-
     # Generate report
     if use_ai:
         # Check for OpenAI API key
@@ -201,9 +194,10 @@ def main(
             use_ai = False
         else:
             console.print(f"\n[cyan]Generating AI-powered report using {openai_model}...[/cyan]")
+            console.print("[dim]The AI will analyze and categorize your contributions.[/dim]")
             try:
                 llm_generator = LLMReportGenerator(
-                    categorized,
+                    data,
                     api_key=openai_key,
                     model=openai_model,
                 )
@@ -215,6 +209,12 @@ def main(
                 raise typer.Exit(1)
 
     if not use_ai:
+        # Use template-based report with rule-based categorization
+        console.print("\n[cyan]Analyzing contributions...[/cyan]")
+        categorizer = Categorizer()
+        categorized = categorizer.categorize(data)
+        console.print(f"[green]✓[/green] Identified {len(categorized.big_rocks)} big rocks")
+        
         console.print("\n[cyan]Generating template-based report...[/cyan]")
         generator = ReportGenerator(categorized)
         filepath = generator.save(output_dir)
