@@ -1,23 +1,18 @@
 """Data fetcher for GitHub contributions."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import json
 import os
 import sys
-from pathlib import Path
 
-from github.Issue import Issue
-from github.PullRequest import PullRequest as GHPullRequest
-from github.Repository import Repository
 from rich.progress import Progress, TaskID
 from rich.console import Console
 
 from .github_client import GitHubClient
 
-# Number of concurrent API requests for fetching PR details
-MAX_WORKERS = 10
+# Branches to exclude from PR fetching (e.g., auto-merge PRs to production)
+EXCLUDED_BASE_BRANCHES = {"production"}
 
 # GraphQL query for fetching authored PRs with all required fields in one request
 # Using first: 50 to avoid timeout issues with large responses
@@ -41,6 +36,7 @@ query($searchQuery: String!, $cursor: String) {
         additions
         deletions
         changedFiles
+        baseRefName
         labels(first: 10) {
           nodes {
             name
@@ -343,19 +339,15 @@ class DataFetcher:
             return " ".join(f"org:{org}" for org in self.orgs)
 
     def fetch_all(
-        self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False, use_graphql: bool = True
+        self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False
     ) -> ContributionData:
         """
-        Fetch all contribution data using GitHub API.
-
-        By default, uses GraphQL API for efficiency (fewer API calls, all data in one request).
-        Falls back to REST API if GraphQL fails.
+        Fetch all contribution data using GitHub GraphQL API.
 
         Args:
             progress: Optional Rich progress bar.
             console: Optional Rich console for status updates.
             fetch_commits: Whether to fetch commit data (slower, disabled by default).
-            use_graphql: Whether to use GraphQL API (default True). Falls back to REST if GraphQL fails.
 
         Returns:
             ContributionData containing all fetched data.
@@ -367,15 +359,13 @@ class DataFetcher:
         )
 
         username = self.target_username
-        scope_query = self._build_scope_query()
 
         if console:
             if self.repos:
                 console.print(f"  [dim]Searching in {len(self.repos)} repo(s) across {len(self.orgs)} org(s)[/dim]")
             else:
                 console.print(f"  [dim]Searching across all repos in {len(self.orgs)} org(s)[/dim]")
-            if use_graphql:
-                console.print(f"  [dim]Using GraphQL API for efficient fetching[/dim]")
+            console.print(f"  [dim]Using GraphQL API for efficient fetching[/dim]")
             console.print("")
 
         # Create progress task if provided - we have 2 or 3 phases depending on fetch_commits
@@ -388,14 +378,7 @@ class DataFetcher:
         if progress and task is not None:
             progress.update(task, description="[cyan]Searching for your PRs...")
         
-        # Try GraphQL first, fall back to REST if it fails
-        if use_graphql:
-            graphql_success = self._fetch_authored_prs_graphql(username, scope_query, data, console)
-            if not graphql_success:
-                # Fall back to REST
-                self._fetch_authored_prs_search(username, scope_query, data, console)
-        else:
-            self._fetch_authored_prs_search(username, scope_query, data, console)
+        self._fetch_authored_prs_graphql(username, data, console)
         
         if progress and task is not None:
             progress.update(task, advance=1)
@@ -407,27 +390,20 @@ class DataFetcher:
                 description=f"[cyan]Searching for your reviews... [dim]({len(data.pull_requests)} PRs found)[/dim]",
             )
         
-        # Try GraphQL first, fall back to REST if it fails
-        if use_graphql:
-            graphql_success = self._fetch_reviews_graphql(username, scope_query, data, console)
-            if not graphql_success:
-                # Fall back to REST
-                self._fetch_reviews_search(username, scope_query, data, console)
-        else:
-            self._fetch_reviews_search(username, scope_query, data, console)
+        self._fetch_reviews_graphql(username, data, console)
         
         if progress and task is not None:
             progress.update(task, advance=1)
 
         # Phase 3: Fetch commits (optional, disabled by default)
-        # Note: Commits still use REST as they're rarely needed and GraphQL commit search is limited
+        # Note: Commits use REST as GraphQL commit search is limited
         if fetch_commits:
             if progress and task is not None:
                 progress.update(
                     task,
                     description=f"[cyan]Fetching commits... [dim]({len(data.pull_requests)} PRs, {len(data.reviews)} reviews)[/dim]",
                 )
-            self._fetch_commits_search(username, scope_query, data, console)
+            self._fetch_commits_search(username, self._build_scope_query(), data, console)
             if progress and task is not None:
                 progress.update(task, advance=1)
 
@@ -444,88 +420,6 @@ class DataFetcher:
                 )
 
         return data
-
-    def _fetch_authored_prs_search(
-        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
-    ):
-        """Fetch pull requests authored by the user using Search API."""
-        # Search for merged PRs by this author in the date range
-        # Using merged: for merged PRs gives us accurate date filtering
-        query = (
-            f"type:pr author:{username} is:merged "
-            f"merged:{self.start_date_str}..{self.end_date_str} {scope_query}"
-        )
-
-        try:
-            # Fetch merged PRs only
-            if console:
-                console.print(f"  [dim]Query: {query}[/dim]")
-                console.print(f"  [dim]Searching for merged PRs...[/dim]")
-            merged_issues = self.client.client.search_issues(query)
-            total_count = merged_issues.totalCount
-            if console:
-                console.print(f"  [dim]Found {total_count} merged PRs, fetching details...[/dim]")
-            
-            # Collect issues first, then fetch PR details in parallel
-            issues_list = list(merged_issues)
-            pr_results = self._fetch_pr_details_parallel(issues_list, is_author=True, console=console)
-            data.pull_requests.extend(pr_results)
-            
-            if console:
-                console.print(f"  [dim]Processed {len(pr_results)} merged PRs                    [/dim]")
-
-        except Exception as e:
-            print(f"Warning: Could not search for authored PRs: {e}", file=sys.stderr)
-
-    def _fetch_reviews_search(
-        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
-    ):
-        """Fetch code reviews given by the user using Search API."""
-        # Search for PRs reviewed by this user
-        # Note: reviewed-by finds PRs where user submitted a review
-        # We search for PRs updated in our date range, then filter reviews by date
-        query = (
-            f"type:pr reviewed-by:{username} -author:{username} "
-            f"updated:{self.start_date_str}..{self.end_date_str} {scope_query}"
-        )
-
-        try:
-            issues = self.client.client.search_issues(query)
-            pr_count = 0
-            for issue in issues:
-                pr_count += 1
-                if console:
-                    console.print(f"  [dim]Processing review PR {pr_count}...[/dim]", end="\r")
-                # Need to get the full PR to access reviews
-                try:
-                    pr = issue.as_pull_request()
-                    repo_full_name = issue.repository.full_name
-                    repo_name = issue.repository.name
-
-                    # Get reviews and filter by user and date
-                    reviews = pr.get_reviews()
-                    for review in reviews:
-                        if review.user and review.user.login == username:
-                            if review.submitted_at and self._in_date_range(review.submitted_at):
-                                review_data = ReviewData(
-                                    pr_number=pr.number,
-                                    pr_title=pr.title,
-                                    repo_name=repo_name,
-                                    repo_full_name=repo_full_name,
-                                    pr_url=pr.html_url,
-                                    submitted_at=review.submitted_at,
-                                    state=review.state,
-                                    author=pr.user.login if pr.user else "unknown",
-                                )
-                                data.reviews.append(review_data)
-                except Exception:
-                    # Skip if we can't get the PR details
-                    continue
-            if console and pr_count > 0:
-                console.print(f"  [dim]Processed {pr_count} reviewed PRs                    [/dim]")
-
-        except Exception as e:
-            print(f"Warning: Could not search for reviews: {e}", file=sys.stderr)
 
     def _fetch_commits_search(
         self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
@@ -590,8 +484,8 @@ class DataFetcher:
             return [f"org:{org}" for org in self.orgs]
 
     def _fetch_authored_prs_graphql(
-        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
-    ) -> bool:
+        self, username: str, data: ContributionData, console: Console | None = None
+    ) -> None:
         """
         Fetch pull requests authored by the user using GraphQL API.
         
@@ -600,68 +494,62 @@ class DataFetcher:
         
         When specific repos are requested, queries each repo separately to avoid
         query length issues with GitHub's GraphQL API.
-        
-        Returns:
-            True if successful, False if GraphQL failed (caller should fall back to REST).
         """
         scopes = self._get_graphql_scopes()
         
         if console:
             console.print(f"  [dim]Fetching merged PRs via GraphQL ({len(scopes)} scope(s))...[/dim]")
         
-        try:
-            total_fetched = 0
+        total_fetched = 0
+        
+        for scope_idx, scope in enumerate(scopes):
+            # Build the search query for this scope
+            search_query = (
+                f"type:pr author:{username} is:merged "
+                f"merged:{self.start_date_str}..{self.end_date_str} {scope}"
+            )
             
-            for scope_idx, scope in enumerate(scopes):
-                # Build the search query for this scope
-                search_query = (
-                    f"type:pr author:{username} is:merged "
-                    f"merged:{self.start_date_str}..{self.end_date_str} {scope}"
+            cursor = None
+            
+            while True:
+                result = self.client.execute_graphql(
+                    AUTHORED_PRS_GRAPHQL,
+                    variables={"searchQuery": search_query, "cursor": cursor}
                 )
                 
-                cursor = None
+                search_data = result.get("search", {})
+                nodes = search_data.get("nodes", [])
+                page_info = search_data.get("pageInfo", {})
                 
-                while True:
-                    result = self.client.execute_graphql(
-                        AUTHORED_PRS_GRAPHQL,
-                        variables={"searchQuery": search_query, "cursor": cursor}
-                    )
+                for node in nodes:
+                    if not node:  # Skip null nodes
+                        continue
                     
-                    search_data = result.get("search", {})
-                    nodes = search_data.get("nodes", [])
-                    page_info = search_data.get("pageInfo", {})
+                    # Skip PRs targeting excluded branches (e.g., production)
+                    base_ref = node.get("baseRefName", "")
+                    if base_ref in EXCLUDED_BASE_BRANCHES:
+                        continue
                     
-                    for node in nodes:
-                        if not node:  # Skip null nodes
-                            continue
-                        
-                        pr_data = self._parse_graphql_pr(node, is_author=True)
-                        if pr_data:
-                            data.pull_requests.append(pr_data)
-                            total_fetched += 1
-                    
-                    if console:
-                        console.print(f"  [dim]Fetched {total_fetched} PRs (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
-                    
-                    # Check for more pages
-                    if page_info.get("hasNextPage"):
-                        cursor = page_info.get("endCursor")
-                    else:
-                        break
-            
-            if console:
-                console.print(f"  [dim]Processed {total_fetched} merged PRs via GraphQL          [/dim]")
-            
-            return True
-            
-        except Exception as e:
-            if console:
-                console.print(f"  [dim]GraphQL failed, falling back to REST: {e}[/dim]")
-            return False
+                    pr_data = self._parse_graphql_pr(node, is_author=True)
+                    if pr_data:
+                        data.pull_requests.append(pr_data)
+                        total_fetched += 1
+                
+                if console:
+                    console.print(f"  [dim]Fetched {total_fetched} PRs (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
+                
+                # Check for more pages
+                if page_info.get("hasNextPage"):
+                    cursor = page_info.get("endCursor")
+                else:
+                    break
+        
+        if console:
+            console.print(f"  [dim]Processed {total_fetched} merged PRs via GraphQL          [/dim]")
 
     def _fetch_reviews_graphql(
-        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
-    ) -> bool:
+        self, username: str, data: ContributionData, console: Console | None = None
+    ) -> None:
         """
         Fetch code reviews given by the user using GraphQL API.
         
@@ -670,72 +558,61 @@ class DataFetcher:
         
         When specific repos are requested, queries each repo separately to avoid
         query length issues with GitHub's GraphQL API.
-        
-        Returns:
-            True if successful, False if GraphQL failed (caller should fall back to REST).
         """
         scopes = self._get_graphql_scopes()
         
         if console:
             console.print(f"  [dim]Fetching reviews via GraphQL ({len(scopes)} scope(s))...[/dim]")
         
-        try:
-            total_reviews = 0
-            prs_processed = 0
+        total_reviews = 0
+        prs_processed = 0
+        
+        for scope_idx, scope in enumerate(scopes):
+            # Build the search query for this scope
+            search_query = (
+                f"type:pr reviewed-by:{username} -author:{username} "
+                f"updated:{self.start_date_str}..{self.end_date_str} {scope}"
+            )
             
-            for scope_idx, scope in enumerate(scopes):
-                # Build the search query for this scope
-                search_query = (
-                    f"type:pr reviewed-by:{username} -author:{username} "
-                    f"updated:{self.start_date_str}..{self.end_date_str} {scope}"
+            cursor = None
+            
+            while True:
+                result = self.client.execute_graphql(
+                    REVIEWS_GRAPHQL,
+                    variables={
+                        "searchQuery": search_query,
+                        "username": username,
+                        "cursor": cursor,
+                    }
                 )
                 
-                cursor = None
+                search_data = result.get("search", {})
+                nodes = search_data.get("nodes", [])
+                page_info = search_data.get("pageInfo", {})
                 
-                while True:
-                    result = self.client.execute_graphql(
-                        REVIEWS_GRAPHQL,
-                        variables={
-                            "searchQuery": search_query,
-                            "username": username,
-                            "cursor": cursor,
-                        }
-                    )
+                for node in nodes:
+                    if not node:  # Skip null nodes
+                        continue
                     
-                    search_data = result.get("search", {})
-                    nodes = search_data.get("nodes", [])
-                    page_info = search_data.get("pageInfo", {})
-                    
-                    for node in nodes:
-                        if not node:  # Skip null nodes
-                            continue
-                        
-                        prs_processed += 1
-                        reviews = self._parse_graphql_reviews(node, username)
-                        for review_data in reviews:
-                            # Filter by date range
-                            if self._in_date_range(review_data.submitted_at):
-                                data.reviews.append(review_data)
-                                total_reviews += 1
-                    
-                    if console:
-                        console.print(f"  [dim]Processed {prs_processed} PRs, found {total_reviews} reviews (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
-                    
-                    # Check for more pages
-                    if page_info.get("hasNextPage"):
-                        cursor = page_info.get("endCursor")
-                    else:
-                        break
-            
-            if console:
-                console.print(f"  [dim]Processed {prs_processed} reviewed PRs, found {total_reviews} reviews via GraphQL          [/dim]")
-            
-            return True
-            
-        except Exception as e:
-            if console:
-                console.print(f"  [dim]GraphQL failed for reviews, falling back to REST: {e}[/dim]")
-            return False
+                    prs_processed += 1
+                    reviews = self._parse_graphql_reviews(node, username)
+                    for review_data in reviews:
+                        # Filter by date range
+                        if self._in_date_range(review_data.submitted_at):
+                            data.reviews.append(review_data)
+                            total_reviews += 1
+                
+                if console:
+                    console.print(f"  [dim]Processed {prs_processed} PRs, found {total_reviews} reviews (scope {scope_idx + 1}/{len(scopes)})...[/dim]", end="\r")
+                
+                # Check for more pages
+                if page_info.get("hasNextPage"):
+                    cursor = page_info.get("endCursor")
+                else:
+                    break
+        
+        if console:
+            console.print(f"  [dim]Processed {prs_processed} reviewed PRs, found {total_reviews} reviews via GraphQL          [/dim]")
 
     def _parse_graphql_pr(self, node: dict, is_author: bool) -> PullRequestData | None:
         """Parse a GraphQL PR node into PullRequestData."""
@@ -821,46 +698,6 @@ class DataFetcher:
         except Exception:
             return None
 
-    # =========================================================================
-    # REST-based fetch methods (fallback)
-    # =========================================================================
-
-    def _fetch_pr_details_parallel(
-        self, issues: list[Issue], is_author: bool, console: Console | None = None
-    ) -> list[PullRequestData]:
-        """Fetch PR details for multiple issues in parallel.
-        
-        This is much faster than fetching sequentially since we can make
-        multiple API calls concurrently.
-        """
-        results: list[PullRequestData] = []
-        total = len(issues)
-        
-        if total == 0:
-            return results
-        
-        completed = 0
-        
-        def fetch_one(issue: Issue) -> PullRequestData | None:
-            return self._create_pr_data_from_issue(issue, is_author=is_author, fetch_details=True)
-        
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(fetch_one, issue): issue for issue in issues}
-            
-            for future in as_completed(futures):
-                completed += 1
-                if console:
-                    console.print(f"  [dim]Fetching PR details: {completed}/{total}...[/dim]", end="\r")
-                try:
-                    pr_data = future.result()
-                    if pr_data:
-                        results.append(pr_data)
-                except Exception:
-                    # Skip PRs that fail to fetch
-                    pass
-        
-        return results
-
     def _in_date_range(self, dt: datetime) -> bool:
         """Check if a datetime is within the target year."""
         # Handle timezone-aware datetimes
@@ -868,81 +705,3 @@ class DataFetcher:
             dt = dt.replace(tzinfo=None)
         return self.start_date <= dt <= self.end_date
 
-    def _create_pr_data_from_issue(
-        self, issue: Issue, is_author: bool, fetch_details: bool = False
-    ) -> PullRequestData | None:
-        """Create a PullRequestData object from a GitHub Issue (search result).
-
-        Search API returns Issues, which need to be converted to PRs for full data.
-        If fetch_details is False, we use issue data directly (faster, no extra API call)
-        but won't have additions/deletions/changed_files stats.
-        """
-        try:
-            repo = issue.repository
-            
-            if fetch_details:
-                # Convert issue to PR to get PR-specific fields (slow - extra API call)
-                pr = issue.as_pull_request()
-                return PullRequestData(
-                    number=pr.number,
-                    title=pr.title,
-                    body=pr.body,
-                    repo_name=repo.name,
-                    repo_full_name=repo.full_name,
-                    url=pr.html_url,
-                    state=pr.state,
-                    merged=pr.merged,
-                    created_at=pr.created_at,
-                    merged_at=pr.merged_at,
-                    additions=pr.additions,
-                    deletions=pr.deletions,
-                    changed_files=pr.changed_files,
-                    labels=[label.name for label in pr.labels],
-                    is_author=is_author,
-                )
-            else:
-                # Use issue data directly (fast - no extra API call)
-                # We infer merged status from the search query context
-                # Note: additions/deletions/changed_files not available from issue
-                return PullRequestData(
-                    number=issue.number,
-                    title=issue.title,
-                    body=issue.body,
-                    repo_name=repo.name,
-                    repo_full_name=repo.full_name,
-                    url=issue.html_url,
-                    state=issue.state,
-                    merged=issue.state == "closed" and issue.pull_request is not None,
-                    created_at=issue.created_at,
-                    merged_at=issue.closed_at,  # Best approximation from issue data
-                    additions=0,  # Not available without fetching PR details
-                    deletions=0,
-                    changed_files=0,
-                    labels=[label.name for label in issue.labels],
-                    is_author=is_author,
-                )
-        except Exception:
-            # If we can't process the issue, skip it
-            return None
-
-    def _create_pr_data(
-        self, pr: GHPullRequest, repo: Repository, is_author: bool
-    ) -> PullRequestData:
-        """Create a PullRequestData object from a GitHub PR."""
-        return PullRequestData(
-            number=pr.number,
-            title=pr.title,
-            body=pr.body,
-            repo_name=repo.name,
-            repo_full_name=repo.full_name,
-            url=pr.html_url,
-            state=pr.state,
-            merged=pr.merged,
-            created_at=pr.created_at,
-            merged_at=pr.merged_at,
-            additions=pr.additions,
-            deletions=pr.deletions,
-            changed_files=pr.changed_files,
-            labels=[label.name for label in pr.labels],
-            is_author=is_author,
-        )

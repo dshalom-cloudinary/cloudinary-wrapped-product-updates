@@ -8,7 +8,7 @@ export type HeroStats = {
 
 export type FunFact = {
   label: string;
-  value: string;
+  value: string | number;
   detail: string;
 };
 

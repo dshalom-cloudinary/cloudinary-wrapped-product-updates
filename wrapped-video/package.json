@@ -4,7 +4,7 @@
   "description": "GitHub Wrapped 2025 Video",
   "scripts": {
     "start": "npx remotion studio",
-    "build": "npx remotion render src/index.ts WrappedVideo out/wrapped-2025.mp4",
+    "build": "node render.js",
     "upgrade": "npx remotion upgrade"
   },
   "dependencies": {
