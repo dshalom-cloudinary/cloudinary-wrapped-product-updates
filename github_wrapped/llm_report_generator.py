@@ -380,7 +380,7 @@ Write a compelling, evidence-based performance review that I can use as a starti
                 {"role": "user", "content": user_message},
             ],
             temperature=0.7,
-            max_tokens=4000,
+            max_completion_tokens=4000,
         )
         
         report_content = response.choices[0].message.content or ""

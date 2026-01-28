@@ -211,9 +211,8 @@ def main(
                 console.print(f"\n[bold green]✓ AI-powered report saved to:[/bold green] {filepath}")
                 console.print("\n[dim]Review and customize the report to add context from your work.[/dim]")
             except Exception as e:
-                console.print(f"\n[yellow]Warning:[/yellow] AI report generation failed: {e}")
-                console.print("Falling back to template-based report...\n")
-                use_ai = False
+                console.print(f"\n[red]Error:[/red] AI report generation failed: {e}")
+                raise typer.Exit(1)
 
     if not use_ai:
         console.print("\n[cyan]Generating template-based report...[/cyan]")
