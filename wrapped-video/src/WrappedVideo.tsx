@@ -1,5 +1,6 @@
 import React from 'react';
-import {AbsoluteFill, Sequence} from 'remotion';
+import {AbsoluteFill, staticFile, useVideoConfig, interpolate} from 'remotion';
+import {Audio} from '@remotion/media';
 import {TransitionSeries, linearTiming} from '@remotion/transitions';
 import {fade} from '@remotion/transitions/fade';
 import {slide} from '@remotion/transitions/slide';
@@ -18,6 +19,7 @@ type WrappedVideoProps = {
 };
 
 export const WrappedVideo: React.FC<WrappedVideoProps> = ({data}) => {
+  const {fps, durationInFrames} = useVideoConfig();
   const TRANSITION_DURATION = 20;
   
   // Scene durations in frames (at 30fps)
@@ -29,8 +31,37 @@ export const WrappedVideo: React.FC<WrappedVideoProps> = ({data}) => {
   const TOP_REPOS_DURATION = 180; // 6 seconds
   const OUTRO_DURATION = 180; // 6 seconds
 
+  // Volume control for background music with fade in/out
+  const volumeCallback = (frame: number) => {
+    const fadeInDuration = fps * 2; // 2 second fade in
+    const fadeOutStart = durationInFrames - fps * 3; // Start fade out 3 seconds before end
+    
+    // Fade in at the start
+    if (frame < fadeInDuration) {
+      return interpolate(frame, [0, fadeInDuration], [0, 0.4], {
+        extrapolateRight: 'clamp',
+      });
+    }
+    
+    // Fade out at the end
+    if (frame > fadeOutStart) {
+      return interpolate(frame, [fadeOutStart, durationInFrames], [0.4, 0], {
+        extrapolateLeft: 'clamp',
+      });
+    }
+    
+    // Normal volume
+    return 0.4;
+  };
+
   return (
     <AbsoluteFill style={{backgroundColor: '#0a0a1a'}}>
+      {/* Background Music */}
+      <Audio
+        src={staticFile('background-music.mp3')}
+        volume={volumeCallback}
+        loop
+      />
       <TransitionSeries>
         {/* Intro */}
         <TransitionSeries.Sequence durationInFrames={INTRO_DURATION}>

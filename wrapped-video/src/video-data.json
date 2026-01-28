@@ -15,12 +15,12 @@
     {
       "label": "Biggest single PR",
       "value": "+91,763 lines",
-      "detail": "media_analyzer PR #277 ("Capsule async support") weighed in at +89,325/-2,438. That's not a PR — it's a feature expansion pack."
+      "detail": "media_analyzer PR #277 (Capsule async support) weighed in at +89,325/-2,438. That's not a PR - it's a feature expansion pack."
     },
     {
       "label": "Review powerhouse",
       "value": "273 reviews",
-      "detail": "You gave 273 reviews — with @cloudinary-pkoniu (47) and @netaeiny (40) as your top teammates supported. Human CI, activated."
+      "detail": "You gave 273 reviews - with @cloudinary-pkoniu (47) and @netaeiny (40) as your top teammates supported. Human CI, activated."
     },
     {
       "label": "Permissions era",
@@ -29,7 +29,7 @@
     },
     {
       "label": "Release-captain energy",
-      "value": "163,211 lines",
+      "value": "+163,211 lines",
       "detail": "Major release trains rolled through dl_object_detection (e.g., PR #4473 at +93,196/-70,015). You helped shepherd the big merges safely home."
     }
   ],
@@ -41,7 +41,7 @@
       "linesChanged": 91763
     },
     {
-      "title": "S3-Backed Async Responses (a.k.a. "Stop Losing Results")",
+      "title": "S3-Backed Async Responses (a.k.a. Stop Losing Results)",
       "repo": "media_analyzer",
       "impact": "Moved async responses onto S3 and tightened the pipeline so results can be fetched reliably under real-world load.",
       "linesChanged": 2042
@@ -69,12 +69,12 @@
     {
       "quarter": "Q1",
       "prs": 77,
-      "highlights": "Launched the year with Media Analyzer expansions (Watermark/IQA) and a flurry of Captain Crash foundations — early momentum set the tone."
+      "highlights": "Launched the year with Media Analyzer expansions (Watermark/IQA) and a flurry of Captain Crash foundations - early momentum set the tone."
     },
     {
       "quarter": "Q2",
       "prs": 40,
-      "highlights": "Permissions + platform polish in cloudinary, plus steady ops improvements — the "make it solid" quarter."
+      "highlights": "Permissions + platform polish in cloudinary, plus steady ops improvements - the make it solid quarter."
     },
     {
       "quarter": "Q3",
@@ -84,39 +84,29 @@
     {
       "quarter": "Q4",
       "prs": 71,
-      "highlights": "The finishing sprint: Capsule async mega-PR, S3 async responses, infra tuning, and dl_object_detection release work — closing 2025 at full throttle."
+      "highlights": "The finishing sprint: Capsule async mega-PR, S3 async responses, infra tuning, and dl_object_detection release work - closing 2025 at full throttle."
     }
   ],
   "topRepos": [
-    {
-      "name": "cloudinary",
-      "prs": 45,
-      "funFact": "Your "granular permissions" tour guide — from Folder Search enforcement to asset move/rename flows and RESTORE actions."
-    },
-    {
-      "name": "media_analyzer",
-      "prs": 44,
-      "funFact": "Home of the year's largest leap: async analysis via Capsule, plus billing bypass and S3-based response delivery."
-    },
     {
       "name": "captain-crash-lambda",
       "prs": 74,
       "funFact": "The on-call sidekick got superpowers: GPT summaries, richer context providers, and Slack UX upgrades."
     },
     {
-      "name": "dl_object_detection",
-      "prs": 36,
-      "funFact": "Where release engineering meets reliability — e2e hardening, deployment flow fixes, and huge RC merges."
+      "name": "cloudinary",
+      "prs": 45,
+      "funFact": "Your granular permissions tour guide - from Folder Search enforcement to asset move/rename flows and RESTORE actions."
     },
     {
-      "name": "mms-infra",
-      "prs": 13,
-      "funFact": "Quiet but crucial: capacity tuning, scaling rule experiments, and container dependency order for graceful shutdowns."
+      "name": "media_analyzer",
+      "prs": 44,
+      "funFact": "Home of the year's largest leap: async analysis via Capsule, plus billing bypass and S3-based response delivery."
     }
   ],
   "yearInReview": {
     "headline": "The Year of Async & Reliability",
-    "tagline": "212 PRs merged • 239,563 lines added • 273 reviews • 5 repos • from permissions hardening to Capsule-powered async at massive scale"
+    "tagline": "212 PRs merged - 239,563 lines added - 273 reviews - 5 repos - from permissions hardening to Capsule-powered async at massive scale"
   },
   "meta": {
     "username": "adilester",
