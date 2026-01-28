@@ -1,5 +1,5 @@
 prepare:
-	cd wrapped-video && npm run prepare-data -- $(params)
+	cd wrapped-video && npm run prepare-data -- $(file)
 
 render:
 	cd wrapped-video && npm run build

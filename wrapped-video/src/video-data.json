@@ -1,116 +1,116 @@
 {
   "heroStats": {
-    "prsMerged": 89,
-    "linesAdded": 176768,
-    "linesRemoved": 101483,
-    "reviewsGiven": 320,
-    "repositoriesContributed": 5
+    "prsMerged": 27,
+    "linesAdded": 10026,
+    "linesRemoved": 4406,
+    "reviewsGiven": 356,
+    "repositoriesContributed": 2
   },
   "funFacts": [
     {
-      "label": "Biggest Code Avalanche",
-      "value": 144985,
-      "detail": "One PR in dl_object_detection rewired the shard Docker image with +79,101/-65,884 lines—an entire mountain range of change."
+      "label": "Review Machine Mode",
+      "value": 356,
+      "detail": "While shipping 27 PRs, you also kept the team moving with 356 reviews—basically the CI pipeline’s best friend."
     },
     {
-      "label": "Q4 Turbo Mode",
-      "value": 40,
-      "detail": "Almost half your PRs landed in Q4 (40/89) — end-of-year shipping streak unlocked."
+      "label": "Top Teammate Boost",
+      "value": 63,
+      "detail": "Most-reviewed teammate: @pelegbr (63 reviews). That’s elite-level pairing—without even sharing a keyboard."
     },
     {
-      "label": "The Review Machine",
-      "value": 320,
-      "detail": "You were the team’s merge-lane traffic controller: 320 reviews, including 111 for @ylavi-cloudinary and 60 for @aviadmx."
+      "label": "Biggest PR (by churn)",
+      "value": 2841,
+      "detail": "“Permissions inspector Feature Branch” was a full-on feature drop: +2273/-568 across 42 files in cloudinary."
     },
     {
-      "label": "Largest PR by Files Touched",
-      "value": 1083,
-      "detail": "The Git LFS migration in dl_object_detection touched 1,083 files—clean hands, dirty repo."
+      "label": "Permission Blitz Finale",
+      "value": 3,
+      "detail": "You closed the year with a permissions_blitz streak (Dec 17, Dec 29, Dec 31)—shipping infra + spec fixes right up to New Year’s Eve."
     },
     {
-      "label": "Build & Deploy Whisperer",
-      "value": 4,
-      "detail": "You repeatedly tuned Jenkins checkout/LFS/shallow clone flows—keeping CI fast, reliable, and drama-free across multiple PRs."
+      "label": "Quarter Peak",
+      "value": 10,
+      "detail": "Q2 was your busiest shipping season with 10 merged PRs—prime time for the Permissions Inspector build-out."
     }
   ],
   "bigRocks": [
     {
-      "title": "Shard Docker Megalift",
-      "repo": "dl_object_detection",
-      "impact": "Modernized the shard Docker stack at scale, unblocking smoother builds and deployments for the model pipeline.",
-      "linesChanged": 144985
+      "title": "Permissions Inspector: The X-Ray Vision Upgrade",
+      "repo": "cloudinary",
+      "impact": "Delivered a major Permissions Inspector capability across dozens of files, making permission behavior visible and actionable.",
+      "linesChanged": 2841
     },
     {
-      "title": "Teacher Data Agent: Factory Mode",
-      "repo": "dl_research",
-      "impact": "Built a production-ready teacher-data generation pipeline with rate limiting, checkpointing, and cost estimation for VLM distillation.",
-      "linesChanged": 14668
+      "title": "Enforcer Unification: One Rules Engine to Rule Them All",
+      "repo": "cloudinary",
+      "impact": "Refactored and unified permission enforcers to cut repetition and standardize permission checks across scopes.",
+      "linesChanged": 3416
     },
     {
-      "title": "Training Infra: Student VLM Bootcamp",
-      "repo": "dl_research",
-      "impact": "Delivered end-to-end training infrastructure (LoRA, callbacks, tests) to make distillation training reliable and repeatable.",
-      "linesChanged": 8601
+      "title": "Granular Permissions Spec Compatibility Layer",
+      "repo": "cloudinary",
+      "impact": "Built infrastructure so specs can run in both granular-permissions modes without rewriting controller tests.",
+      "linesChanged": 1224
     },
     {
-      "title": "VQA Structured Output Upgrade",
-      "repo": "dl_object_detection",
-      "impact": "Added structured output support (schema extraction + tool-use parameters) to make VQA responses machine-parseable and robust.",
-      "linesChanged": 711
+      "title": "RequestContext Everywhere",
+      "repo": "cloudinary",
+      "impact": "Plumbed RequestContext through internal APIs and stabilized specs by resetting context after each run.",
+      "linesChanged": 180
     },
     {
-      "title": "Logo Recognition Enters the Chat",
-      "repo": "dl_object_detection",
-      "impact": "Introduced a full logo-recognition capability (detector + embedder + utilities + tests) to expand content analysis power.",
-      "linesChanged": 2943
+      "title": "PDP Cleanup: Surgical Reverts & Action Tweaks",
+      "repo": "permissions_pdp",
+      "impact": "Kept the PDP surface area safe and consistent with targeted action updates and a clean revert when needed.",
+      "linesChanged": 34
     }
   ],
   "quarterlyActivity": [
     {
       "quarter": "Q1",
-      "prs": 17,
-      "highlights": "Early-year foundation work: mocking/test stability and steady dl_utils bumps to keep pipelines healthy."
+      "prs": 8,
+      "highlights": "Permissions groundwork + Addons fixes, capped by a big “enforcer & inspect” push that set the tone for the year."
     },
     {
       "quarter": "Q2",
-      "prs": 7,
-      "highlights": "Precision quarter: super-res transparency fixes and RealESRGANer refactors that made edge cases behave."
+      "prs": 10,
+      "highlights": "The Permissions Inspector era—multiple large drops landed, turning permission logic into something you can actually reason about."
     },
     {
       "quarter": "Q3",
-      "prs": 25,
-      "highlights": "Feature wave: OpenAI logprobs + confidence scoring, Flux txt2img adventures, and model upgrades landing fast."
+      "prs": 6,
+      "highlights": "Stability and correctness: RequestContext plumbing, spec hygiene, and even an N+1 fix—quiet wins that prevent loud outages."
     },
     {
       "quarter": "Q4",
-      "prs": 40,
-      "highlights": "Full send: LFS + Jenkins tune-ups, new models (Logo Recognition), and the dl_research distillation pipeline coming online."
+      "prs": 3,
+      "highlights": "Year-end permissions_blitz: spec compatibility infra + granular spec fixes, merged right up to 2025-12-31."
     }
   ],
   "topRepos": [
     {
-      "name": "dl_object_detection",
-      "prs": 67,
-      "funFact": "Your main arena: from VQA confidence scoring to CI/LFS migrations—this repo got the blockbuster treatment."
+      "name": "cloudinary",
+      "prs": 25,
+      "funFact": "Your main stage: 25 PRs including the year’s biggest feature drop (Permissions Inspector) and the deepest refactor (Enforcer Unification)."
     },
     {
-      "name": "dl_utils",
-      "prs": 13,
-      "funFact": "The reliability engine room: BrushNet training pipeline, TRT10 updates, and a steady stream of performance-minded fixes."
+      "name": "permissions_pdp",
+      "prs": 2,
+      "funFact": "Small repo, high leverage: quick, targeted changes (and a clean revert) to keep permissions behavior predictable."
     },
     {
-      "name": "dl_research",
-      "prs": 4,
-      "funFact": "Small PR count, massive impact: you stood up the distillation data + training infrastructure in a single Q4 surge."
+      "name": "cloudinary",
+      "prs": 25,
+      "funFact": "Also home to your Q4 sprint finish—granular-permissions spec compatibility shipped in time for the New Year’s Eve merge."
     }
   ],
   "yearInReview": {
-    "headline": "The Year of Shipping (and Shepherding)",
-    "tagline": "89 PRs merged, 176,768 lines added, 320 reviews—big model features, bigger infra, and a whole lot of team unblock."
+    "headline": "The Year of Permissions Clarity",
+    "tagline": "27 PRs merged, 10,026 lines added, 356 reviews—shipping tools, refactors, and spec infrastructure that made permissions make sense."
   },
   "meta": {
-    "username": "davidas1",
+    "username": "eitan-revach",
     "year": 2025,
-    "generatedAt": "2026-01-28T19:15:21.885327"
+    "generatedAt": "2026-01-28T19:40:33.581024"
   }
 }
