@@ -137,6 +137,8 @@ Generate a JSON object with the following structure:
   ],
   "topRepos": [
     // Top 3 repositories by contribution, with a fun fact about each
+    // IMPORTANT: Each repository must appear exactly ONCE - no duplicates!
+    // If there are fewer than 3 repos, only include those that exist
     { "name": "...", "prs": <number>, "funFact": "..." }
   ],
   "yearInReview": {
@@ -476,7 +478,20 @@ Generate the video data JSON as specified in the system prompt."""
                 f"OpenAI returned empty content for video data. {'; '.join(error_details)}."
             )
         
-        return json.loads(content)
+        video_data = json.loads(content)
+        
+        # Post-process to deduplicate topRepos (LLM sometimes returns duplicates)
+        if "topRepos" in video_data and isinstance(video_data["topRepos"], list):
+            seen_repos: set[str] = set()
+            unique_repos = []
+            for repo in video_data["topRepos"]:
+                repo_name = repo.get("name", "")
+                if repo_name and repo_name not in seen_repos:
+                    seen_repos.add(repo_name)
+                    unique_repos.append(repo)
+            video_data["topRepos"] = unique_repos
+        
+        return video_data
     
     def _generate_header(self) -> str:
         """Generate the report header."""
