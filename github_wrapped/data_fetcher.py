@@ -354,23 +354,17 @@ class DataFetcher:
         """Fetch pull requests authored by the user using Search API."""
         # Search for merged PRs by this author in the date range
         # Using merged: for merged PRs gives us accurate date filtering
-        merged_query = (
+        query = (
             f"type:pr author:{username} is:merged "
             f"merged:{self.start_date_str}..{self.end_date_str} {scope_query}"
         )
 
-        # Also search for closed-but-not-merged PRs created in the date range
-        closed_query = (
-            f"type:pr author:{username} is:closed is:unmerged "
-            f"created:{self.start_date_str}..{self.end_date_str} {scope_query}"
-        )
-
         try:
-            # Fetch merged PRs
+            # Fetch merged PRs only
             if console:
-                console.print(f"  [dim]Query: {merged_query}[/dim]")
+                console.print(f"  [dim]Query: {query}[/dim]")
                 console.print(f"  [dim]Searching for merged PRs...[/dim]")
-            merged_issues = self.client.client.search_issues(merged_query)
+            merged_issues = self.client.client.search_issues(query)
             total_count = merged_issues.totalCount
             if console:
                 console.print(f"  [dim]Found {total_count} merged PRs, fetching details...[/dim]")
@@ -382,21 +376,6 @@ class DataFetcher:
             
             if console:
                 console.print(f"  [dim]Processed {len(pr_results)} merged PRs                    [/dim]")
-
-            # Fetch closed (not merged) PRs
-            if console:
-                console.print(f"  [dim]Searching for closed PRs...[/dim]")
-            closed_issues = self.client.client.search_issues(closed_query)
-            closed_count = closed_issues.totalCount
-            if console and closed_count > 0:
-                console.print(f"  [dim]Found {closed_count} closed PRs, fetching details...[/dim]")
-            
-            if closed_count > 0:
-                closed_list = list(closed_issues)
-                closed_results = self._fetch_pr_details_parallel(closed_list, is_author=True, console=console)
-                data.pull_requests.extend(closed_results)
-                if console:
-                    console.print(f"  [dim]Processed {len(closed_results)} closed PRs                    [/dim]")
 
         except Exception as e:
             print(f"Warning: Could not search for authored PRs: {e}", file=sys.stderr)

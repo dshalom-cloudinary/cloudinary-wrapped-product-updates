@@ -403,7 +403,8 @@ Write a compelling, evidence-based performance review that I can use as a starti
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        filename = f"performance-review-{self.data.year}-ai.md"
+        timestamp = int(datetime.now().timestamp())
+        filename = f"performance-review-{self.data.year}-ai-{timestamp}.md"
         filepath = output_path / filename
         
         report = self.generate()
