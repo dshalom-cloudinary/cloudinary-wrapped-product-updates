@@ -24,6 +24,12 @@ def main(
         "-o",
         help="Comma-separated list of GitHub organizations to fetch from.",
     ),
+    repos: str = typer.Option(
+        None,
+        "--repos",
+        "-r",
+        help="Comma-separated list of specific repository names to fetch from. If not specified, fetches from all repos in the organizations.",
+    ),
     year: int = typer.Option(
         2025,
         "--year",
@@ -41,7 +47,7 @@ def main(
         "--token",
         "-t",
         envvar="GITHUB_TOKEN",
-        help="GitHub Personal Access Token (can also set GITHUB_TOKEN env var).",
+        help="GitHub Personal Access Token. If not provided, will use OAuth Device Flow for one-time authentication.",
     ),
 ):
     """
@@ -51,6 +57,7 @@ def main(
     and generates a markdown report aligned to the Execution/Culture review framework.
     """
     org_list = [o.strip() for o in orgs.split(",") if o.strip()]
+    repo_list = [r.strip() for r in repos.split(",") if r.strip()] if repos else None
 
     if not org_list:
         console.print("[red]Error:[/red] At least one organization is required.")
@@ -58,14 +65,19 @@ def main(
 
     console.print(f"\n[bold]GitHub Wrapped[/bold] - {year} Performance Review\n")
     console.print(f"Organizations: {', '.join(org_list)}")
+    if repo_list:
+        console.print(f"Repositories: {', '.join(repo_list)}")
+    else:
+        console.print("Repositories: all")
     console.print("")
 
     try:
-        with GitHubClient(token=token) as client:
+        with GitHubClient(token=token, console=console) as client:
             # Verify connection
             console.print(f"[green]✓[/green] Authenticated as [bold]{client.username}[/bold]")
 
             # Fetch data with progress
+            console.print("[cyan]Fetching contribution data...[/cyan]")
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -73,8 +85,8 @@ def main(
                 TaskProgressColumn(),
                 console=console,
             ) as progress:
-                fetcher = DataFetcher(client, year, org_list)
-                data = fetcher.fetch_all(progress)
+                fetcher = DataFetcher(client, year, org_list, repos=repo_list)
+                data = fetcher.fetch_all(progress, console=console)
 
             console.print("")
             console.print(f"[green]✓[/green] Found {len(data.merged_prs)} merged PRs")
@@ -104,6 +116,8 @@ def main(
             console.print(f"\n[bold green]✓ Report saved to:[/bold green] {filepath}")
             console.print("\nUse this report to help fill out your performance review!")
 
+    except typer.Exit:
+        raise  # Re-raise typer.Exit to allow clean exits
     except ValueError as e:
         console.print(f"\n[red]Error:[/red] {e}")
         raise typer.Exit(1)

@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterator
+import sys
 
 from github.PullRequest import PullRequest as GHPullRequest
 from github.Repository import Repository
 from rich.progress import Progress, TaskID
+from rich.console import Console
 
 from .github_client import GitHubClient
 
@@ -85,7 +86,13 @@ class ContributionData:
 class DataFetcher:
     """Fetches contribution data from GitHub."""
 
-    def __init__(self, client: GitHubClient, year: int, orgs: list[str]):
+    def __init__(
+        self,
+        client: GitHubClient,
+        year: int,
+        orgs: list[str],
+        repos: list[str] | None = None,
+    ):
         """
         Initialize the data fetcher.
 
@@ -93,19 +100,25 @@ class DataFetcher:
             client: Authenticated GitHub client.
             year: The year to fetch data for.
             orgs: List of organization names to fetch from.
+            repos: Optional list of specific repository names to fetch from.
+                   If None, fetches from all repos in the organizations.
         """
         self.client = client
         self.year = year
         self.orgs = orgs
+        self.repos = set(repos) if repos else None
         self.start_date = datetime(year, 1, 1)
         self.end_date = datetime(year, 12, 31, 23, 59, 59)
 
-    def fetch_all(self, progress: Progress | None = None) -> ContributionData:
+    def fetch_all(
+        self, progress: Progress | None = None, console: Console | None = None
+    ) -> ContributionData:
         """
         Fetch all contribution data.
 
         Args:
             progress: Optional Rich progress bar.
+            console: Optional Rich console for status updates.
 
         Returns:
             ContributionData containing all fetched data.
@@ -119,11 +132,20 @@ class DataFetcher:
         # Collect all repos from all orgs
         all_repos: list[Repository] = []
         for org_name in self.orgs:
-            repos = self.client.get_org_repos(org_name)
-            all_repos.extend(repos)
+            if console:
+                console.print(f"  [dim]Discovering repos in {org_name}...[/dim]")
+            org_repos = self.client.get_org_repos(org_name)
+            all_repos.extend(org_repos)
+
+        # Filter to specific repos if specified
+        if self.repos:
+            all_repos = [r for r in all_repos if r.name in self.repos]
 
         if not all_repos:
             return data
+
+        if console:
+            console.print(f"  [dim]Found {len(all_repos)} repos to scan[/dim]\n")
 
         # Create progress task if provided
         task: TaskID | None = None
@@ -133,25 +155,61 @@ class DataFetcher:
                 total=len(all_repos),
             )
 
-        for repo in all_repos:
-            self._fetch_repo_data(repo, data)
+        for i, repo in enumerate(all_repos, 1):
+            if progress and task is not None:
+                progress.update(
+                    task,
+                    description=f"[cyan]({i}/{len(all_repos)}) {repo.name}: fetching PRs...",
+                )
+            self._fetch_repo_data(repo, data, progress, task, i, len(all_repos))
             if progress and task is not None:
                 progress.update(task, advance=1)
 
         return data
 
-    def _fetch_repo_data(self, repo: Repository, data: ContributionData):
+    def _fetch_repo_data(
+        self,
+        repo: Repository,
+        data: ContributionData,
+        progress: Progress | None = None,
+        task: TaskID | None = None,
+        repo_num: int = 0,
+        total_repos: int = 0,
+    ):
         """Fetch all contribution data from a single repository."""
         username = self.client.username
 
+        def update_status(status: str, counts: str = ""):
+            if progress and task is not None:
+                desc = f"[cyan]({repo_num}/{total_repos}) {repo.name}: {status}"
+                if counts:
+                    desc += f" [dim]({counts})[/dim]"
+                progress.update(task, description=desc)
+
+        prs_before = len(data.pull_requests)
+        reviews_before = len(data.reviews)
+        commits_before = len(data.commits)
+
         # Fetch PRs authored by user
+        update_status("fetching PRs...")
         self._fetch_authored_prs(repo, username, data)
 
         # Fetch PRs reviewed by user
+        prs_found = len(data.pull_requests) - prs_before
+        update_status("fetching reviews...", f"{prs_found} PRs")
         self._fetch_reviews(repo, username, data)
 
         # Fetch commits by user
+        reviews_found = len(data.reviews) - reviews_before
+        update_status("fetching commits...", f"{prs_found} PRs, {reviews_found} reviews")
         self._fetch_commits(repo, username, data)
+
+        # Final count for this repo
+        commits_found = len(data.commits) - commits_before
+        update_status(
+            "done",
+            f"{prs_found} PRs, {reviews_found} reviews, {commits_found} commits",
+        )
 
     def _fetch_authored_prs(
         self, repo: Repository, username: str, data: ContributionData
@@ -161,43 +219,52 @@ class DataFetcher:
             # Get all closed PRs (which includes merged)
             prs = repo.get_pulls(state="closed", sort="updated", direction="desc")
 
-            for pr in self._filter_prs_by_date(prs):
-                if pr.user and pr.user.login == username:
+            for pr in prs:
+                # Check if authored by user
+                if not (pr.user and pr.user.login == username):
+                    continue
+                
+                # For authored PRs, use merged_at date if merged, otherwise created_at
+                check_date = pr.merged_at if pr.merged else pr.created_at
+                if check_date and self._in_date_range(check_date):
                     pr_data = self._create_pr_data(pr, repo, is_author=True)
                     data.pull_requests.append(pr_data)
-        except Exception:
-            # Skip repos we can't access
-            pass
+        except Exception as e:
+            # Log but continue - don't silently swallow all errors
+            print(f"Warning: Could not fetch PRs from {repo.full_name}: {e}", file=sys.stderr)
 
     def _fetch_reviews(self, repo: Repository, username: str, data: ContributionData):
         """Fetch code reviews given by the user."""
         try:
-            # Get closed PRs to find reviews
-            prs = repo.get_pulls(state="closed", sort="updated", direction="desc")
+            # Get both open and closed PRs to find all reviews
+            for state in ["closed", "open"]:
+                prs = repo.get_pulls(state=state, sort="updated", direction="desc")
 
-            for pr in self._filter_prs_by_date(prs):
-                # Skip own PRs
-                if pr.user and pr.user.login == username:
-                    continue
+                for pr in prs:
+                    # Skip own PRs
+                    if pr.user and pr.user.login == username:
+                        continue
 
-                reviews = pr.get_reviews()
-                for review in reviews:
-                    if review.user and review.user.login == username:
-                        if review.submitted_at and self._in_date_range(review.submitted_at):
-                            review_data = ReviewData(
-                                pr_number=pr.number,
-                                pr_title=pr.title,
-                                repo_name=repo.name,
-                                repo_full_name=repo.full_name,
-                                pr_url=pr.html_url,
-                                submitted_at=review.submitted_at,
-                                state=review.state,
-                                author=pr.user.login if pr.user else "unknown",
-                            )
-                            data.reviews.append(review_data)
-        except Exception:
-            # Skip repos we can't access
-            pass
+                    # Check all reviews on this PR
+                    reviews = pr.get_reviews()
+                    for review in reviews:
+                        if review.user and review.user.login == username:
+                            # Filter by when the review was submitted (not PR date)
+                            if review.submitted_at and self._in_date_range(review.submitted_at):
+                                review_data = ReviewData(
+                                    pr_number=pr.number,
+                                    pr_title=pr.title,
+                                    repo_name=repo.name,
+                                    repo_full_name=repo.full_name,
+                                    pr_url=pr.html_url,
+                                    submitted_at=review.submitted_at,
+                                    state=review.state,
+                                    author=pr.user.login if pr.user else "unknown",
+                                )
+                                data.reviews.append(review_data)
+        except Exception as e:
+            # Log but continue - don't silently swallow all errors
+            print(f"Warning: Could not fetch reviews from {repo.full_name}: {e}", file=sys.stderr)
 
     def _fetch_commits(self, repo: Repository, username: str, data: ContributionData):
         """Fetch commits made by the user."""
@@ -221,23 +288,9 @@ class DataFetcher:
                         deletions=commit.stats.deletions if commit.stats else 0,
                     )
                     data.commits.append(commit_data)
-        except Exception:
-            # Skip repos we can't access
-            pass
-
-    def _filter_prs_by_date(
-        self, prs: Iterator[GHPullRequest]
-    ) -> Iterator[GHPullRequest]:
-        """Filter PRs to only those within the target year."""
-        for pr in prs:
-            # Use merged_at for merged PRs, created_at otherwise
-            check_date = pr.merged_at if pr.merged_at else pr.created_at
-            if check_date and self._in_date_range(check_date):
-                yield pr
-            # Stop if we've gone past our date range (PRs are sorted by updated desc)
-            elif check_date and check_date < self.start_date:
-                # Could be updated recently but created before - continue checking
-                continue
+        except Exception as e:
+            # Log but continue - don't silently swallow all errors
+            print(f"Warning: Could not fetch commits from {repo.full_name}: {e}", file=sys.stderr)
 
     def _in_date_range(self, dt: datetime) -> bool:
         """Check if a datetime is within the target year."""

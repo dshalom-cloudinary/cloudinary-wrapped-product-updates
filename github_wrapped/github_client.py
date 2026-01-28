@@ -4,27 +4,33 @@ import os
 from github import Github, Auth
 from github.GithubException import GithubException
 from dotenv import load_dotenv
+from rich.console import Console
+
+from .device_auth import authenticate_with_device_flow, DeviceFlowError
 
 
 class GitHubClient:
     """Wrapper around PyGithub for fetching contribution data."""
 
-    def __init__(self, token: str | None = None):
+    def __init__(self, token: str | None = None, console: Console | None = None):
         """
         Initialize the GitHub client.
 
         Args:
             token: GitHub Personal Access Token. If not provided,
-                   will attempt to load from GITHUB_TOKEN env var.
+                   will attempt to load from GITHUB_TOKEN env var,
+                   then fall back to Device Flow OAuth.
+            console: Rich console for Device Flow output.
         """
         load_dotenv()
 
         self.token = token or os.getenv("GITHUB_TOKEN")
         if not self.token:
-            raise ValueError(
-                "GitHub token not found. Set GITHUB_TOKEN environment variable "
-                "or pass token directly."
-            )
+            # No token provided, use Device Flow
+            try:
+                self.token = authenticate_with_device_flow(console=console)
+            except DeviceFlowError as e:
+                raise ValueError(str(e))
 
         auth = Auth.Token(self.token)
         self.client = Github(auth=auth)
