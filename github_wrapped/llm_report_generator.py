@@ -58,31 +58,21 @@ You will be given detailed GitHub contribution data for a year, including:
 - Commits made
 - Repository and project distribution
 
-Your task is to:
-1. **Analyze and categorize** the contributions (features, bug fixes, infrastructure/DevOps, documentation, refactoring, tests, etc.)
-2. **Identify "big rocks"** - major accomplishments that had significant impact (large scope, strategic importance, or notable complexity)
-3. **Write a compelling, evidence-based performance review** that addresses both Execution and Culture aspects of the performance framework
+Your task is to analyze the contributions, understand what's important, and write a compelling, evidence-based performance review that addresses both Execution and Culture aspects of the performance framework.
 
 {execution_framework}
 
 {culture_framework}
 
-## Guidelines for Categorization
+## How to Analyze the Data
 
-When categorizing PRs, consider:
-- **Features**: New functionality, capabilities, or user-facing improvements
-- **Bug Fixes**: Corrections to existing functionality, resolving issues
-- **Infrastructure/DevOps**: CI/CD, deployment, monitoring, tooling, automation
-- **Documentation**: README updates, API docs, code comments, guides
-- **Refactoring**: Code cleanup, restructuring, optimization without changing behavior
-- **Tests**: Unit tests, integration tests, test infrastructure
+As you read through the PRs, internally consider:
+- What type of work each PR represents (features, bug fixes, infrastructure, documentation, refactoring, tests, etc.)
+- Which contributions are "big rocks" - major accomplishments with significant impact (large scope, strategic importance, or notable complexity)
+- What themes and patterns emerge across the work
+- How the work demonstrates the Execution and Culture framework values
 
-When identifying "big rocks" (major accomplishments), look for:
-- Large PRs (many files changed, significant lines added/deleted)
-- Strategic initiatives mentioned in descriptions
-- Work that spans multiple areas or enables other work
-- Migration, platform, or architecture changes
-- Launches, releases, or significant milestones
+Use this understanding to write the review, but DO NOT output your categorization or analysis. The review should read naturally, highlighting the most impactful work without explicitly labeling PRs by category.
 
 ## Guidelines for Writing
 
@@ -169,10 +159,8 @@ class ContributionSummary:
             lines.append(f"- ... and {len(self.repositories_contributed_to) - 10} more")
         lines.append("")
         
-        # All pull requests - LLM will analyze and categorize these
-        lines.append("## Pull Requests (for you to analyze and categorize)")
-        lines.append("")
-        lines.append("Please analyze each PR to identify its category (feature, bugfix, infrastructure, documentation, refactor, test, or other) and whether it's a 'big rock' (major accomplishment).")
+        # All pull requests
+        lines.append("## Pull Requests")
         lines.append("")
         
         for i, pr in enumerate(self.pull_requests, 1):
@@ -320,10 +308,6 @@ class LLMReportGenerator:
 The review should address the question:
 "Please share your main accomplishments throughout {self.data.year} in the aspects of execution and culture."
 
-First, analyze each PR to understand its purpose and impact. Categorize them (feature, bugfix, infrastructure, documentation, refactor, test) and identify which ones are "big rocks" (major accomplishments).
-
-Then, use that analysis to write the performance review.
-
 Here is my GitHub contribution data:
 
 {prompt_data}
@@ -337,11 +321,33 @@ Write a compelling, evidence-based performance review that I can use as a starti
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            temperature=0.7,
-            max_completion_tokens=4000,
+            max_completion_tokens=10000,
         )
         
-        report_content = response.choices[0].message.content or ""
+        # Check for valid response
+        if not response.choices:
+            raise ValueError(
+                f"OpenAI returned no choices. "
+                f"Finish reason: {getattr(response, 'finish_reason', 'unknown')}"
+            )
+        
+        choice = response.choices[0]
+        report_content = choice.message.content
+        
+        # Check for empty content and provide helpful error
+        if not report_content:
+            finish_reason = getattr(choice, 'finish_reason', 'unknown')
+            refusal = getattr(choice.message, 'refusal', None)
+            
+            error_details = [f"Finish reason: {finish_reason}"]
+            if refusal:
+                error_details.append(f"Refusal: {refusal}")
+            
+            raise ValueError(
+                f"OpenAI returned empty content. {'; '.join(error_details)}. "
+                f"This may indicate the model refused the request, hit a content filter, "
+                f"or the request was too large. Try a different model or reduce the data."
+            )
         
         # Add header and metadata
         header = self._generate_header()
