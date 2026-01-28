@@ -111,11 +111,8 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
               fontSize: 64,
               fontWeight: 800,
               margin: 0,
-              background: `linear-gradient(${shimmer}deg, #c4b5fd, #f0abfc, #fde047, #c4b5fd)`,
-              backgroundSize: '300% 300%',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              color: 'transparent',
+              color: '#fde047',
+              textShadow: '0 0 40px rgba(253, 224, 71, 0.5)',
             }}
           >
             {yearInReview.headline}

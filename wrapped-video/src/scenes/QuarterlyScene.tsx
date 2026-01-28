@@ -87,8 +87,6 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
         style={{
           display: 'flex',
           gap: 40,
-          alignItems: 'flex-end',
-          height: 400,
           marginTop: 60,
         }}
       >
@@ -99,7 +97,8 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
             config: {damping: 80, stiffness: 120},
           });
 
-          const barHeight = (quarter.prs / maxPRs) * 300;
+          const maxBarHeight = 300;
+          const barHeight = (quarter.prs / maxPRs) * maxBarHeight;
           const animatedHeight = interpolate(barProgress, [0, 1], [0, barHeight]);
 
           const colors = [
@@ -134,16 +133,26 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
                 {Math.floor(interpolate(barProgress, [0, 1], [0, quarter.prs]))}
               </div>
 
-              {/* Bar */}
+              {/* Bar container - fixed height to align all bars at the bottom */}
               <div
                 style={{
                   width: 120,
-                  height: animatedHeight,
-                  background: color.bar,
-                  borderRadius: '16px 16px 8px 8px',
-                  boxShadow: `0 0 40px ${color.glow}40`,
+                  height: maxBarHeight,
+                  display: 'flex',
+                  alignItems: 'flex-end',
                 }}
-              />
+              >
+                {/* Bar */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: animatedHeight,
+                    background: color.bar,
+                    borderRadius: '16px 16px 8px 8px',
+                    boxShadow: `0 0 40px ${color.glow}40`,
+                  }}
+                />
+              </div>
 
               {/* Quarter label */}
               <div
@@ -167,6 +176,7 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
                   textAlign: 'center',
                   opacity: barProgress,
                   transform: `translateY(${interpolate(barProgress, [0, 1], [10, 0])}px)`,
+                  height: 60,
                 }}
               >
                 {quarter.highlights.split(':')[0]}
