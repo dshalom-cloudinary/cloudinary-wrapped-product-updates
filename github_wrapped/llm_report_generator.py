@@ -136,7 +136,7 @@ Generate a JSON object with the following structure:
     { "quarter": "Q4", "prs": <number>, "highlights": "..." }
   ],
   "topRepos": [
-    // Top 3-5 repositories by contribution, with a fun fact about each
+    // Top 3 repositories by contribution, with a fun fact about each
     { "name": "...", "prs": <number>, "funFact": "..." }
   ],
   "yearInReview": {

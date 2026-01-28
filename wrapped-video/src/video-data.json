@@ -1,106 +1,126 @@
 {
   "heroStats": {
-    "prsMerged": 75,
-    "linesAdded": 8016,
-    "linesRemoved": 2249,
-    "reviewsGiven": 125,
-    "repositoriesContributed": 1
+    "prsMerged": 207,
+    "linesAdded": 133515,
+    "linesRemoved": 8226,
+    "reviewsGiven": 269,
+    "repositoriesContributed": 5
   },
   "funFacts": [
     {
-      "label": "One-repo MVP",
-      "value": 1,
-      "detail": "All-in on cloudinary: 75 merges focused on one codebase = maximum momentum, minimum context switching."
+      "label": "Peak PR quarter",
+      "value": 77,
+      "detail": "Q1 came out swinging—launch energy plus rapid-fire fixes set the pace for the year."
     },
     {
-      "label": "Busiest quarter",
-      "value": "Q1 (25 PRs)",
-      "detail": "Started the year like a release train—shipping early foundations for permissions, monitors, and migrations."
+      "label": "The mega-PR moment",
+      "value": 91763,
+      "detail": "One PR in media_analyzer shipped Capsule async support (+89325/-2438)—an actual feature saga in a single merge."
     },
     {
-      "label": "Largest PR by lines",
-      "value": "+863/-457",
-      "detail": "The 'Visual Search Monitor' mega-change (PR #19516): big surface area, big confidence boost for search monitoring."
+      "label": "Review machine",
+      "value": 269,
+      "detail": "You didn’t just ship code—you unblocked the team all year with a steady stream of approvals and sharp comments."
     },
     {
-      "label": "Safety-first refactors",
-      "value": "125 reviews",
-      "detail": "You were the quality gate: heavy review support for @cloudinary-jenkins (23) and @adilester (20), plus 20+ more teammates."
+      "label": "Top teammate boost",
+      "value": 47,
+      "detail": "Most-reviewed collaborator: @cloudinary-pkoniu (47 reviews). Certified “I’ve got you” energy."
     },
     {
-      "label": "Theme of the year",
-      "value": "Permissions + Folders + OpenSearch",
-      "detail": "From granular permissions responses to folder CRUD schemas and OpenSearch cleanup—tightening both security and reliability."
+      "label": "Low-churn, high-impact",
+      "value": 16217,
+      "detail": "Net code growth of 125,289 lines (133,515 added minus 8,226 removed): big builds, minimal thrash."
     }
   ],
   "bigRocks": [
     {
-      "title": "Visual Search Watchtower",
-      "repo": "cloudinary",
-      "impact": "Built and stabilized visual search monitoring so issues get spotted before customers do.",
-      "linesChanged": 1320
+      "title": "Capsule Goes Async (The Big Bang)",
+      "repo": "media_analyzer",
+      "impact": "Delivered true asynchronous analysis support for AI Vision + Captioning, unlocking scalable async workflows end-to-end.",
+      "linesChanged": 91763
     },
     {
-      "title": "403: The Permission Awakens",
-      "repo": "cloudinary",
-      "impact": "Upgraded authorization behavior and defaults, making access rules clearer and safer across flows.",
-      "linesChanged": 555
+      "title": "Captain Crash Gets a Brain (GPT + Context)",
+      "repo": "captain-crash-lambda",
+      "impact": "Turned incident reporting into a smarter assistant by adding GPT capabilities and richer context providers (Rollbar/Coralogix/ArgoCD).",
+      "linesChanged": 16982
     },
     {
-      "title": "Folders API: From Sketch to Ship",
-      "repo": "cloudinary",
-      "impact": "Delivered folder schema + CRUD building blocks to power consistent folder operations end-to-end.",
-      "linesChanged": 451
+      "title": "New Analysis Powers: Watermark + IQA",
+      "repo": "media_analyzer",
+      "impact": "Expanded the platform’s analysis catalog with Watermark Detection and IQA, setting up new product capabilities.",
+      "linesChanged": 3719
     },
     {
-      "title": "Single-Folder Rule Enforcer",
-      "repo": "cloudinary",
-      "impact": "Implemented enforcement logic that keeps folder behavior predictable and prevents edge-case chaos.",
-      "linesChanged": 513
+      "title": "Async Responses on S3 (Results, Delivered)",
+      "repo": "media_analyzer",
+      "impact": "Moved async responses to S3 for reliability and scale, reducing pressure on synchronous pathways.",
+      "linesChanged": 2042
     },
     {
-      "title": "Role Cleanup on Folder Deletion",
+      "title": "Permission Fortress Upgrades",
       "repo": "cloudinary",
-      "impact": "Made folder deletion safer by removing lingering roles and closing permission loopholes.",
-      "linesChanged": 560
+      "impact": "Strengthened DAM and API permissions enforcement across folders, assets, and resource endpoints—safer defaults, fewer foot-guns.",
+      "linesChanged": 3443
     }
   ],
   "quarterlyActivity": [
     {
       "quarter": "Q1",
-      "prs": 25,
-      "highlights": "Search + OpenSearch foundations: monitors, credentials, shard experiments, and early permission guardrails."
+      "prs": 77,
+      "highlights": "Big launches kicked off early—new analysis types, prompt engineering, and the Captain Crash foundation sprint."
     },
     {
       "quarter": "Q2",
-      "prs": 15,
-      "highlights": "Folder mechanics took over—schemas, list_sub_folders upgrades, and single-folder enforcement momentum."
+      "prs": 40,
+      "highlights": "Permissions season in cloudinary: enforcement, API correctness, and performance-minded fixes."
     },
     {
       "quarter": "Q3",
-      "prs": 21,
-      "highlights": "Navigation and folder workflows got polished—full-tree flow fixes, download flow work, and 'rename' hardening."
+      "prs": 24,
+      "highlights": "Stability arc: edge-case fixes, smarter uploads (HttpSource), and tightening customer-facing errors."
     },
     {
       "quarter": "Q4",
-      "prs": 14,
-      "highlights": "Year-end reliability sprint: locks for datasource updates, minimal permission responses, and long-operations improvements."
+      "prs": 66,
+      "highlights": "Year-end turbo mode—Capsule async landed, infra scaling tuned, and dl_object_detection reliability upgrades shipped."
     }
   ],
   "topRepos": [
     {
       "name": "cloudinary",
-      "prs": 75,
-      "funFact": "The full season was played on one field—and you still racked up 125 reviews while shipping 75 merges."
+      "prs": 45,
+      "funFact": "Home base for permissions hardening—folders, assets, metadata, and API endpoints all got safer and sharper."
+    },
+    {
+      "name": "media_analyzer",
+      "prs": 44,
+      "funFact": "The ‘big build’ repo: from prompt engineering to async S3 pipelines to the massive Capsule async leap."
+    },
+    {
+      "name": "captain-crash-lambda",
+      "prs": 35,
+      "funFact": "From zero to incident sidekick—context collectors, Slack ergonomics, and GPT-driven summaries."
+    },
+    {
+      "name": "dl_object_detection",
+      "prs": 31,
+      "funFact": "Reliability & ops glow-up: graceful ECS shutdown, CloudWatch metrics reporting, and e2e stabilization."
+    },
+    {
+      "name": "mms-infra",
+      "prs": 12,
+      "funFact": "Quiet but critical: scaling rules, shard capacity tuning, and container dependency ordering for safer deploys."
     }
   ],
   "yearInReview": {
-    "headline": "The Year of Safer Access & Smoother Search",
-    "tagline": "75 PRs merged, 8,016 lines added, 2,249 removed, and 125 reviews—locking down permissions, leveling up folders, and keeping OpenSearch honest."
+    "headline": "The Year of Async & Reliability",
+    "tagline": "207 PRs merged, 133,515 lines added, 269 reviews—shipping big features while keeping systems calm under pressure."
   },
   "meta": {
-    "username": "netaeiny",
+    "username": "adilester",
     "year": 2025,
-    "generatedAt": "2026-01-28T15:41:15.214621"
+    "generatedAt": "2026-01-28T18:28:45.734041"
   }
 }

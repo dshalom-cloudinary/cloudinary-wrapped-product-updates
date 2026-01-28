@@ -5,6 +5,7 @@
   "scripts": {
     "start": "npx remotion studio",
     "build": "node render.js",
+    "prepare-data": "node prepare-video-data.js",
     "upgrade": "npx remotion upgrade"
   },
   "dependencies": {

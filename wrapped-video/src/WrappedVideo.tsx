@@ -13,6 +13,16 @@ import {QuarterlyScene} from './scenes/QuarterlyScene';
 import {TopReposScene} from './scenes/TopReposScene';
 import {OutroScene} from './scenes/OutroScene';
 import type {VideoData} from './types';
+import {
+  TRANSITION_DURATION,
+  INTRO_DURATION,
+  HERO_STATS_DURATION,
+  QUARTERLY_DURATION,
+  TOP_REPOS_DURATION,
+  OUTRO_DURATION,
+  getFunFactsDuration,
+  getBigRocksDuration,
+} from './durations';
 
 type WrappedVideoProps = {
   data: VideoData;
@@ -20,16 +30,10 @@ type WrappedVideoProps = {
 
 export const WrappedVideo: React.FC<WrappedVideoProps> = ({data}) => {
   const {fps, durationInFrames} = useVideoConfig();
-  const TRANSITION_DURATION = 20;
   
-  // Scene durations in frames (at 30fps)
-  const INTRO_DURATION = 120; // 4 seconds
-  const HERO_STATS_DURATION = 180; // 6 seconds
-  const FUN_FACTS_DURATION = 120 * Math.min(data.funFacts.length, 5); // 4 seconds per fact
-  const BIG_ROCKS_DURATION = 150 * Math.min(data.bigRocks.length, 5); // 5 seconds per rock
-  const QUARTERLY_DURATION = 180; // 6 seconds
-  const TOP_REPOS_DURATION = 180; // 6 seconds
-  const OUTRO_DURATION = 180; // 6 seconds
+  // Dynamic durations based on data
+  const FUN_FACTS_DURATION = getFunFactsDuration(data.funFacts.length);
+  const BIG_ROCKS_DURATION = getBigRocksDuration(data.bigRocks.length);
 
   // Volume control for background music with fade in/out
   const volumeCallback = (frame: number) => {

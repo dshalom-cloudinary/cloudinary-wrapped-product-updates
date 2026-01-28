@@ -11,6 +11,7 @@ import {
 } from 'remotion';
 import {loadFont} from '@remotion/google-fonts/Poppins';
 import type {BigRock} from '../types';
+import {BIG_ROCK_SLIDE_DURATION} from '../durations';
 
 const {fontFamily} = loadFont('normal', {
   weights: ['400', '600', '700', '800'],
@@ -231,15 +232,13 @@ type BigRocksSceneProps = {
 };
 
 export const BigRocksScene: React.FC<BigRocksSceneProps> = ({bigRocks}) => {
-  const ROCK_DURATION = 150; // 5 seconds per rock at 30fps
-
   return (
     <AbsoluteFill>
       {bigRocks.slice(0, 5).map((rock, index) => (
         <Sequence
           key={index}
-          from={index * ROCK_DURATION}
-          durationInFrames={ROCK_DURATION}
+          from={index * BIG_ROCK_SLIDE_DURATION}
+          durationInFrames={BIG_ROCK_SLIDE_DURATION}
           premountFor={30}
         >
           <BigRockCard rock={rock} index={index} total={Math.min(bigRocks.length, 5)} />

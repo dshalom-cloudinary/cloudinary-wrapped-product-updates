@@ -11,6 +11,7 @@ import {
 } from 'remotion';
 import {loadFont} from '@remotion/google-fonts/Poppins';
 import type {FunFact} from '../types';
+import {FUN_FACT_SLIDE_DURATION} from '../durations';
 
 const {fontFamily} = loadFont('normal', {
   weights: ['400', '600', '700', '800'],
@@ -177,15 +178,13 @@ type FunFactsSceneProps = {
 };
 
 export const FunFactsScene: React.FC<FunFactsSceneProps> = ({funFacts}) => {
-  const FACT_DURATION = 120; // 4 seconds per fact at 30fps
-
   return (
     <AbsoluteFill>
       {funFacts.slice(0, 5).map((fact, index) => (
         <Sequence
           key={index}
-          from={index * FACT_DURATION}
-          durationInFrames={FACT_DURATION}
+          from={index * FUN_FACT_SLIDE_DURATION}
+          durationInFrames={FUN_FACT_SLIDE_DURATION}
           premountFor={30}
         >
           <FunFactCard fact={fact} index={index} />

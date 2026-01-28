@@ -103,7 +103,7 @@ export const TopReposScene: React.FC<TopReposSceneProps> = ({repos}) => {
           marginTop: 60,
         }}
       >
-        {repos.map((repo, index) => {
+        {repos.slice(0, 3).map((repo, index) => {
           const cardProgress = spring({
             frame: frame - 20 - index * 20,
             fps,
@@ -211,10 +211,10 @@ export const TopReposScene: React.FC<TopReposSceneProps> = ({repos}) => {
               {/* Fun fact */}
               <p
                 style={{
-                  fontSize: 16,
-                  fontWeight: 400,
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  lineHeight: 1.5,
+                  fontSize: 18,
+                  fontWeight: 500,
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  lineHeight: 1.6,
                   margin: 0,
                 }}
               >
