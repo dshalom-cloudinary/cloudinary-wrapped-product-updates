@@ -305,6 +305,7 @@ class DataFetcher:
         year: int,
         orgs: list[str],
         repos: list[str] | None = None,
+        target_username: str | None = None,
     ):
         """
         Initialize the data fetcher.
@@ -315,11 +316,14 @@ class DataFetcher:
             orgs: List of organization names to fetch from.
             repos: Optional list of specific repository names to fetch from.
                    If None, fetches from all repos in the organizations.
+            target_username: GitHub username to fetch data for. If None, uses
+                   the authenticated user's username.
         """
         self.client = client
         self.year = year
         self.orgs = orgs
         self.repos = repos  # Keep as list for search queries
+        self.target_username = target_username or client.username
         self.start_date = datetime(year, 1, 1)
         self.end_date = datetime(year, 12, 31, 23, 59, 59)
         self.start_date_str = f"{year}-01-01"
@@ -357,12 +361,12 @@ class DataFetcher:
             ContributionData containing all fetched data.
         """
         data = ContributionData(
-            username=self.client.username,
+            username=self.target_username,
             year=self.year,
             orgs=self.orgs,
         )
 
-        username = self.client.username
+        username = self.target_username
         scope_query = self._build_scope_query()
 
         if console:

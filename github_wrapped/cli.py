@@ -88,6 +88,12 @@ def main(
         "--save-data/--no-save-data",
         help="Save fetched data to a JSON file for later reuse.",
     ),
+    github_username: str = typer.Option(
+        None,
+        "--github-username",
+        "-u",
+        help="GitHub username to display in the video (defaults to authenticated user).",
+    ),
 ):
     """
     Generate a GitHub Wrapped performance review report.
@@ -102,7 +108,14 @@ def main(
         try:
             console.print(f"[cyan]Loading data from:[/cyan] {from_file}")
             data = ContributionData.load(from_file)
-            console.print(f"[green]✓[/green] Loaded data for [bold]{data.username}[/bold] ({data.year})")
+            
+            # Override username if provided
+            if github_username:
+                data.username = github_username
+                console.print(f"[green]✓[/green] Using username: [bold]{github_username}[/bold]")
+            else:
+                console.print(f"[green]✓[/green] Loaded data for [bold]{data.username}[/bold] ({data.year})")
+            
             console.print(f"[green]✓[/green] Organizations: {', '.join(data.orgs)}")
             console.print(f"[green]✓[/green] Found {len(data.merged_prs)} merged PRs")
             console.print(f"[green]✓[/green] Found {len(data.reviews)} code reviews")
@@ -139,6 +152,11 @@ def main(
             with GitHubClient(token=token, console=console) as client:
                 # Verify connection
                 console.print(f"[green]✓[/green] Authenticated as [bold]{client.username}[/bold]")
+                
+                # Determine target username (use provided or authenticated user)
+                target_user = github_username or client.username
+                if github_username and github_username != client.username:
+                    console.print(f"[cyan]→[/cyan] Fetching data for [bold]{github_username}[/bold]")
 
                 # Fetch data with progress
                 console.print("[cyan]Fetching contribution data...[/cyan]")
@@ -149,7 +167,7 @@ def main(
                     TaskProgressColumn(),
                     console=console,
                 ) as progress:
-                    fetcher = DataFetcher(client, year, org_list, repos=repo_list)
+                    fetcher = DataFetcher(client, year, org_list, repos=repo_list, target_username=target_user)
                     data = fetcher.fetch_all(progress, console=console, fetch_commits=fetch_commits)
 
                 console.print("")
