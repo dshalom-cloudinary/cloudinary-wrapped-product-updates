@@ -58,7 +58,7 @@ const BigRockCard: React.FC<BigRockCardProps> = ({rock, index, total}) => {
   // Select image based on project
   const bgImage = rock.title.toLowerCase().includes('async') || rock.title.toLowerCase().includes('capsule')
     ? 'async-capsule.png'
-    : 'captain-crash.png';
+    : 'big-rocks-achievement.png';
 
   return (
     <AbsoluteFill

@@ -97,11 +97,6 @@
       "name": "permissions_pdp",
       "prs": 2,
       "funFact": "Small repo, high leverage: quick, targeted changes (and a clean revert) to keep permissions behavior predictable."
-    },
-    {
-      "name": "cloudinary",
-      "prs": 25,
-      "funFact": "Also home to your Q4 sprint finish—granular-permissions spec compatibility shipped in time for the New Year’s Eve merge."
     }
   ],
   "yearInReview": {
