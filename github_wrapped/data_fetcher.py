@@ -1,15 +1,23 @@
 """Data fetcher for GitHub contributions."""
 
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
+import json
+import os
 import sys
+from pathlib import Path
 
+from github.Issue import Issue
 from github.PullRequest import PullRequest as GHPullRequest
 from github.Repository import Repository
 from rich.progress import Progress, TaskID
 from rich.console import Console
 
 from .github_client import GitHubClient
+
+# Number of concurrent API requests for fetching PR details
+MAX_WORKERS = 10
 
 
 @dataclass
@@ -82,9 +90,144 @@ class ContributionData:
         """Get merged PRs authored by the user."""
         return [pr for pr in self.authored_prs if pr.merged]
 
+    def to_dict(self) -> dict:
+        """Convert ContributionData to a JSON-serializable dictionary."""
+        def serialize_datetime(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            return obj
+
+        def serialize_dataclass(obj):
+            result = {}
+            for key, value in asdict(obj).items():
+                if isinstance(value, datetime):
+                    result[key] = value.isoformat()
+                elif isinstance(value, list):
+                    result[key] = [serialize_datetime(item) for item in value]
+                else:
+                    result[key] = value
+            return result
+
+        return {
+            "username": self.username,
+            "year": self.year,
+            "orgs": self.orgs,
+            "pull_requests": [serialize_dataclass(pr) for pr in self.pull_requests],
+            "reviews": [serialize_dataclass(r) for r in self.reviews],
+            "commits": [serialize_dataclass(c) for c in self.commits],
+        }
+
+    def save(self, output_dir: str = "output") -> str:
+        """
+        Save contribution data to a JSON file.
+
+        Args:
+            output_dir: Directory to save the data file.
+
+        Returns:
+            The path to the saved file.
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"github_data_{self.username}_{self.year}.json"
+        filepath = os.path.join(output_dir, filename)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+        return filepath
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ContributionData":
+        """Create ContributionData from a dictionary (e.g., loaded from JSON)."""
+        def parse_datetime(dt_str: str | None) -> datetime | None:
+            if dt_str is None:
+                return None
+            return datetime.fromisoformat(dt_str)
+
+        pull_requests = [
+            PullRequestData(
+                number=pr["number"],
+                title=pr["title"],
+                body=pr["body"],
+                repo_name=pr["repo_name"],
+                repo_full_name=pr["repo_full_name"],
+                url=pr["url"],
+                state=pr["state"],
+                merged=pr["merged"],
+                created_at=parse_datetime(pr["created_at"]),
+                merged_at=parse_datetime(pr["merged_at"]),
+                additions=pr["additions"],
+                deletions=pr["deletions"],
+                changed_files=pr["changed_files"],
+                labels=pr["labels"],
+                is_author=pr["is_author"],
+            )
+            for pr in data["pull_requests"]
+        ]
+
+        reviews = [
+            ReviewData(
+                pr_number=r["pr_number"],
+                pr_title=r["pr_title"],
+                repo_name=r["repo_name"],
+                repo_full_name=r["repo_full_name"],
+                pr_url=r["pr_url"],
+                submitted_at=parse_datetime(r["submitted_at"]),
+                state=r["state"],
+                author=r["author"],
+            )
+            for r in data["reviews"]
+        ]
+
+        commits = [
+            CommitData(
+                sha=c["sha"],
+                message=c["message"],
+                repo_name=c["repo_name"],
+                repo_full_name=c["repo_full_name"],
+                url=c["url"],
+                date=parse_datetime(c["date"]),
+                additions=c["additions"],
+                deletions=c["deletions"],
+            )
+            for c in data["commits"]
+        ]
+
+        return cls(
+            username=data["username"],
+            year=data["year"],
+            orgs=data["orgs"],
+            pull_requests=pull_requests,
+            reviews=reviews,
+            commits=commits,
+        )
+
+    @classmethod
+    def load(cls, filepath: str) -> "ContributionData":
+        """
+        Load contribution data from a JSON file.
+
+        Args:
+            filepath: Path to the JSON data file.
+
+        Returns:
+            ContributionData loaded from the file.
+
+        Raises:
+            FileNotFoundError: If the file doesn't exist.
+            json.JSONDecodeError: If the file is not valid JSON.
+        """
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
+
 
 class DataFetcher:
-    """Fetches contribution data from GitHub."""
+    """Fetches contribution data from GitHub.
+
+    Uses GitHub's Search API for efficient filtering by author/reviewer,
+    avoiding the need to fetch all PRs and filter locally.
+    """
 
     def __init__(
         self,
@@ -106,15 +249,33 @@ class DataFetcher:
         self.client = client
         self.year = year
         self.orgs = orgs
-        self.repos = set(repos) if repos else None
+        self.repos = repos  # Keep as list for search queries
         self.start_date = datetime(year, 1, 1)
         self.end_date = datetime(year, 12, 31, 23, 59, 59)
+        self.start_date_str = f"{year}-01-01"
+        self.end_date_str = f"{year}-12-31"
+
+    def _build_scope_query(self) -> str:
+        """Build the scope portion of search queries (org/repo filters)."""
+        if self.repos:
+            # Specific repos: use repo:org/repo for each combination
+            repo_queries = []
+            for org in self.orgs:
+                for repo in self.repos:
+                    repo_queries.append(f"repo:{org}/{repo}")
+            return " ".join(repo_queries)
+        else:
+            # All repos in orgs: use org:name for each
+            return " ".join(f"org:{org}" for org in self.orgs)
 
     def fetch_all(
-        self, progress: Progress | None = None, console: Console | None = None
+        self, progress: Progress | None = None, console: Console | None = None, fetch_commits: bool = False
     ) -> ContributionData:
         """
-        Fetch all contribution data.
+        Fetch all contribution data using GitHub Search API.
+
+        This is much more efficient than iterating through all PRs in each repo,
+        as the Search API filters by author/reviewer on the server side.
 
         Args:
             progress: Optional Rich progress bar.
@@ -129,167 +290,187 @@ class DataFetcher:
             orgs=self.orgs,
         )
 
-        # Collect repos to scan
-        all_repos: list[Repository] = []
-
-        if self.repos:
-            # Specific repos requested - fetch them directly (much faster)
-            for org_name in self.orgs:
-                for repo_name in self.repos:
-                    try:
-                        repo = self.client.get_repo(org_name, repo_name)
-                        all_repos.append(repo)
-                        if console:
-                            console.print(f"  [dim]Found {org_name}/{repo_name}[/dim]")
-                    except ValueError:
-                        # Repo doesn't exist in this org, skip silently
-                        pass
-        else:
-            # No specific repos - discover all repos in orgs
-            for org_name in self.orgs:
-                if console:
-                    console.print(f"  [dim]Discovering repos in {org_name}...[/dim]")
-                org_repos = self.client.get_org_repos(org_name)
-                all_repos.extend(org_repos)
-            if console:
-                console.print(f"  [dim]Found {len(all_repos)} repos to scan[/dim]")
-
-        if not all_repos:
-            return data
+        username = self.client.username
+        scope_query = self._build_scope_query()
 
         if console:
+            if self.repos:
+                console.print(f"  [dim]Searching in {len(self.repos)} repo(s) across {len(self.orgs)} org(s)[/dim]")
+            else:
+                console.print(f"  [dim]Searching across all repos in {len(self.orgs)} org(s)[/dim]")
             console.print("")
 
-        # Create progress task if provided
+        # Create progress task if provided - we have 2 or 3 phases depending on fetch_commits
         task: TaskID | None = None
         if progress:
-            task = progress.add_task(
-                f"[cyan]Fetching data from {len(all_repos)} repos...",
-                total=len(all_repos),
-            )
+            total_phases = 3 if fetch_commits else 2
+            task = progress.add_task("[cyan]Fetching contributions...", total=total_phases)
 
-        for i, repo in enumerate(all_repos, 1):
+        # Phase 1: Fetch authored PRs using Search API
+        if progress and task is not None:
+            progress.update(task, description="[cyan]Searching for your PRs...")
+        self._fetch_authored_prs_search(username, scope_query, data, console)
+        if progress and task is not None:
+            progress.update(task, advance=1)
+
+        # Phase 2: Fetch reviews using Search API
+        if progress and task is not None:
+            progress.update(
+                task,
+                description=f"[cyan]Searching for your reviews... [dim]({len(data.pull_requests)} PRs found)[/dim]",
+            )
+        self._fetch_reviews_search(username, scope_query, data, console)
+        if progress and task is not None:
+            progress.update(task, advance=1)
+
+        # Phase 3: Fetch commits (optional, disabled by default)
+        if fetch_commits:
             if progress and task is not None:
                 progress.update(
                     task,
-                    description=f"[cyan]({i}/{len(all_repos)}) {repo.name}: fetching PRs...",
+                    description=f"[cyan]Fetching commits... [dim]({len(data.pull_requests)} PRs, {len(data.reviews)} reviews)[/dim]",
                 )
-            self._fetch_repo_data(repo, data, progress, task, i, len(all_repos))
+            self._fetch_commits_search(username, scope_query, data, console)
             if progress and task is not None:
                 progress.update(task, advance=1)
 
+        if console:
+            if fetch_commits:
+                console.print(
+                    f"  [dim]Found {len(data.pull_requests)} PRs, "
+                    f"{len(data.reviews)} reviews, {len(data.commits)} commits[/dim]"
+                )
+            else:
+                console.print(
+                    f"  [dim]Found {len(data.pull_requests)} PRs, "
+                    f"{len(data.reviews)} reviews[/dim]"
+                )
+
         return data
 
-    def _fetch_repo_data(
-        self,
-        repo: Repository,
-        data: ContributionData,
-        progress: Progress | None = None,
-        task: TaskID | None = None,
-        repo_num: int = 0,
-        total_repos: int = 0,
+    def _fetch_authored_prs_search(
+        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
     ):
-        """Fetch all contribution data from a single repository."""
-        username = self.client.username
-
-        def update_status(status: str, counts: str = ""):
-            if progress and task is not None:
-                desc = f"[cyan]({repo_num}/{total_repos}) {repo.name}: {status}"
-                if counts:
-                    desc += f" [dim]({counts})[/dim]"
-                progress.update(task, description=desc)
-
-        prs_before = len(data.pull_requests)
-        reviews_before = len(data.reviews)
-        commits_before = len(data.commits)
-
-        # Fetch PRs authored by user
-        update_status("fetching PRs...")
-        self._fetch_authored_prs(repo, username, data)
-
-        # Fetch PRs reviewed by user
-        prs_found = len(data.pull_requests) - prs_before
-        update_status("fetching reviews...", f"{prs_found} PRs")
-        self._fetch_reviews(repo, username, data)
-
-        # Fetch commits by user
-        reviews_found = len(data.reviews) - reviews_before
-        update_status("fetching commits...", f"{prs_found} PRs, {reviews_found} reviews")
-        self._fetch_commits(repo, username, data)
-
-        # Final count for this repo
-        commits_found = len(data.commits) - commits_before
-        update_status(
-            "done",
-            f"{prs_found} PRs, {reviews_found} reviews, {commits_found} commits",
+        """Fetch pull requests authored by the user using Search API."""
+        # Search for merged PRs by this author in the date range
+        # Using merged: for merged PRs gives us accurate date filtering
+        merged_query = (
+            f"type:pr author:{username} is:merged "
+            f"merged:{self.start_date_str}..{self.end_date_str} {scope_query}"
         )
 
-    def _fetch_authored_prs(
-        self, repo: Repository, username: str, data: ContributionData
-    ):
-        """Fetch pull requests authored by the user."""
-        try:
-            # Get all closed PRs (which includes merged)
-            prs = repo.get_pulls(state="closed", sort="updated", direction="desc")
+        # Also search for closed-but-not-merged PRs created in the date range
+        closed_query = (
+            f"type:pr author:{username} is:closed is:unmerged "
+            f"created:{self.start_date_str}..{self.end_date_str} {scope_query}"
+        )
 
-            for pr in prs:
-                # Check if authored by user
-                if not (pr.user and pr.user.login == username):
-                    continue
-                
-                # For authored PRs, use merged_at date if merged, otherwise created_at
-                check_date = pr.merged_at if pr.merged else pr.created_at
-                if check_date and self._in_date_range(check_date):
-                    pr_data = self._create_pr_data(pr, repo, is_author=True)
-                    data.pull_requests.append(pr_data)
+        try:
+            # Fetch merged PRs
+            if console:
+                console.print(f"  [dim]Query: {merged_query}[/dim]")
+                console.print(f"  [dim]Searching for merged PRs...[/dim]")
+            merged_issues = self.client.client.search_issues(merged_query)
+            total_count = merged_issues.totalCount
+            if console:
+                console.print(f"  [dim]Found {total_count} merged PRs, fetching details...[/dim]")
+            
+            # Collect issues first, then fetch PR details in parallel
+            issues_list = list(merged_issues)
+            pr_results = self._fetch_pr_details_parallel(issues_list, is_author=True, console=console)
+            data.pull_requests.extend(pr_results)
+            
+            if console:
+                console.print(f"  [dim]Processed {len(pr_results)} merged PRs                    [/dim]")
+
+            # Fetch closed (not merged) PRs
+            if console:
+                console.print(f"  [dim]Searching for closed PRs...[/dim]")
+            closed_issues = self.client.client.search_issues(closed_query)
+            closed_count = closed_issues.totalCount
+            if console and closed_count > 0:
+                console.print(f"  [dim]Found {closed_count} closed PRs, fetching details...[/dim]")
+            
+            if closed_count > 0:
+                closed_list = list(closed_issues)
+                closed_results = self._fetch_pr_details_parallel(closed_list, is_author=True, console=console)
+                data.pull_requests.extend(closed_results)
+                if console:
+                    console.print(f"  [dim]Processed {len(closed_results)} closed PRs                    [/dim]")
+
         except Exception as e:
-            # Log but continue - don't silently swallow all errors
-            print(f"Warning: Could not fetch PRs from {repo.full_name}: {e}", file=sys.stderr)
+            print(f"Warning: Could not search for authored PRs: {e}", file=sys.stderr)
 
-    def _fetch_reviews(self, repo: Repository, username: str, data: ContributionData):
-        """Fetch code reviews given by the user."""
+    def _fetch_reviews_search(
+        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
+    ):
+        """Fetch code reviews given by the user using Search API."""
+        # Search for PRs reviewed by this user
+        # Note: reviewed-by finds PRs where user submitted a review
+        # We search for PRs updated in our date range, then filter reviews by date
+        query = (
+            f"type:pr reviewed-by:{username} -author:{username} "
+            f"updated:{self.start_date_str}..{self.end_date_str} {scope_query}"
+        )
+
         try:
-            # Get both open and closed PRs to find all reviews
-            for state in ["closed", "open"]:
-                prs = repo.get_pulls(state=state, sort="updated", direction="desc")
+            issues = self.client.client.search_issues(query)
+            pr_count = 0
+            for issue in issues:
+                pr_count += 1
+                if console:
+                    console.print(f"  [dim]Processing review PR {pr_count}...[/dim]", end="\r")
+                # Need to get the full PR to access reviews
+                try:
+                    pr = issue.as_pull_request()
+                    repo_full_name = issue.repository.full_name
+                    repo_name = issue.repository.name
 
-                for pr in prs:
-                    # Skip own PRs
-                    if pr.user and pr.user.login == username:
-                        continue
-
-                    # Check all reviews on this PR
+                    # Get reviews and filter by user and date
                     reviews = pr.get_reviews()
                     for review in reviews:
                         if review.user and review.user.login == username:
-                            # Filter by when the review was submitted (not PR date)
                             if review.submitted_at and self._in_date_range(review.submitted_at):
                                 review_data = ReviewData(
                                     pr_number=pr.number,
                                     pr_title=pr.title,
-                                    repo_name=repo.name,
-                                    repo_full_name=repo.full_name,
+                                    repo_name=repo_name,
+                                    repo_full_name=repo_full_name,
                                     pr_url=pr.html_url,
                                     submitted_at=review.submitted_at,
                                     state=review.state,
                                     author=pr.user.login if pr.user else "unknown",
                                 )
                                 data.reviews.append(review_data)
+                except Exception:
+                    # Skip if we can't get the PR details
+                    continue
+            if console and pr_count > 0:
+                console.print(f"  [dim]Processed {pr_count} reviewed PRs                    [/dim]")
+
         except Exception as e:
-            # Log but continue - don't silently swallow all errors
-            print(f"Warning: Could not fetch reviews from {repo.full_name}: {e}", file=sys.stderr)
+            print(f"Warning: Could not search for reviews: {e}", file=sys.stderr)
 
-    def _fetch_commits(self, repo: Repository, username: str, data: ContributionData):
-        """Fetch commits made by the user."""
+    def _fetch_commits_search(
+        self, username: str, scope_query: str, data: ContributionData, console: Console | None = None
+    ):
+        """Fetch commits made by the user using Search API."""
+        # The commits search API has different syntax
+        # committer-date for date range, author for the user
+        query = (
+            f"author:{username} "
+            f"committer-date:{self.start_date_str}..{self.end_date_str} {scope_query}"
+        )
+
         try:
-            commits = repo.get_commits(
-                author=username,
-                since=self.start_date,
-                until=self.end_date,
-            )
-
+            commits = self.client.client.search_commits(query)
+            commit_count = 0
             for commit in commits:
-                if commit.commit.author and commit.commit.author.date:
+                commit_count += 1
+                if console and commit_count % 10 == 0:
+                    console.print(f"  [dim]Processing commit {commit_count}...[/dim]", end="\r")
+                try:
+                    repo = commit.repository
                     commit_data = CommitData(
                         sha=commit.sha[:7],
                         message=commit.commit.message.split("\n")[0],  # First line only
@@ -301,9 +482,50 @@ class DataFetcher:
                         deletions=commit.stats.deletions if commit.stats else 0,
                     )
                     data.commits.append(commit_data)
+                except Exception:
+                    # Skip commits we can't process
+                    continue
+            if console and commit_count > 0:
+                console.print(f"  [dim]Processed {commit_count} commits                    [/dim]")
+
         except Exception as e:
-            # Log but continue - don't silently swallow all errors
-            print(f"Warning: Could not fetch commits from {repo.full_name}: {e}", file=sys.stderr)
+            print(f"Warning: Could not search for commits: {e}", file=sys.stderr)
+
+    def _fetch_pr_details_parallel(
+        self, issues: list[Issue], is_author: bool, console: Console | None = None
+    ) -> list[PullRequestData]:
+        """Fetch PR details for multiple issues in parallel.
+        
+        This is much faster than fetching sequentially since we can make
+        multiple API calls concurrently.
+        """
+        results: list[PullRequestData] = []
+        total = len(issues)
+        
+        if total == 0:
+            return results
+        
+        completed = 0
+        
+        def fetch_one(issue: Issue) -> PullRequestData | None:
+            return self._create_pr_data_from_issue(issue, is_author=is_author, fetch_details=True)
+        
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(fetch_one, issue): issue for issue in issues}
+            
+            for future in as_completed(futures):
+                completed += 1
+                if console:
+                    console.print(f"  [dim]Fetching PR details: {completed}/{total}...[/dim]", end="\r")
+                try:
+                    pr_data = future.result()
+                    if pr_data:
+                        results.append(pr_data)
+                except Exception:
+                    # Skip PRs that fail to fetch
+                    pass
+        
+        return results
 
     def _in_date_range(self, dt: datetime) -> bool:
         """Check if a datetime is within the target year."""
@@ -311,6 +533,63 @@ class DataFetcher:
         if dt.tzinfo is not None:
             dt = dt.replace(tzinfo=None)
         return self.start_date <= dt <= self.end_date
+
+    def _create_pr_data_from_issue(
+        self, issue: Issue, is_author: bool, fetch_details: bool = False
+    ) -> PullRequestData | None:
+        """Create a PullRequestData object from a GitHub Issue (search result).
+
+        Search API returns Issues, which need to be converted to PRs for full data.
+        If fetch_details is False, we use issue data directly (faster, no extra API call)
+        but won't have additions/deletions/changed_files stats.
+        """
+        try:
+            repo = issue.repository
+            
+            if fetch_details:
+                # Convert issue to PR to get PR-specific fields (slow - extra API call)
+                pr = issue.as_pull_request()
+                return PullRequestData(
+                    number=pr.number,
+                    title=pr.title,
+                    body=pr.body,
+                    repo_name=repo.name,
+                    repo_full_name=repo.full_name,
+                    url=pr.html_url,
+                    state=pr.state,
+                    merged=pr.merged,
+                    created_at=pr.created_at,
+                    merged_at=pr.merged_at,
+                    additions=pr.additions,
+                    deletions=pr.deletions,
+                    changed_files=pr.changed_files,
+                    labels=[label.name for label in pr.labels],
+                    is_author=is_author,
+                )
+            else:
+                # Use issue data directly (fast - no extra API call)
+                # We infer merged status from the search query context
+                # Note: additions/deletions/changed_files not available from issue
+                return PullRequestData(
+                    number=issue.number,
+                    title=issue.title,
+                    body=issue.body,
+                    repo_name=repo.name,
+                    repo_full_name=repo.full_name,
+                    url=issue.html_url,
+                    state=issue.state,
+                    merged=issue.state == "closed" and issue.pull_request is not None,
+                    created_at=issue.created_at,
+                    merged_at=issue.closed_at,  # Best approximation from issue data
+                    additions=0,  # Not available without fetching PR details
+                    deletions=0,
+                    changed_files=0,
+                    labels=[label.name for label in issue.labels],
+                    is_author=is_author,
+                )
+        except Exception:
+            # If we can't process the issue, skip it
+            return None
 
     def _create_pr_data(
         self, pr: GHPullRequest, repo: Repository, is_author: bool
