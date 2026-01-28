@@ -203,6 +203,12 @@ def main(
                 )
                 filepath = llm_generator.save(output_dir)
                 console.print(f"\n[bold green]✓ AI-powered report saved to:[/bold green] {filepath}")
+                
+                # Generate video data JSON
+                console.print("\n[cyan]Generating video data...[/cyan]")
+                video_filepath = llm_generator.save_video_data(output_dir)
+                console.print(f"[bold green]✓ Video data saved to:[/bold green] {video_filepath}")
+                
                 console.print("\n[dim]Review and customize the report to add context from your work.[/dim]")
             except Exception as e:
                 console.print(f"\n[red]Error:[/red] AI report generation failed: {e}")

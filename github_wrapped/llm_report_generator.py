@@ -1,5 +1,6 @@
 """LLM-powered report generator for performance reviews."""
 
+import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -98,6 +99,67 @@ Be concise but comprehensive. Each point should be backed by data from the contr
     execution_framework=EXECUTION_FRAMEWORK,
     culture_framework=CULTURE_FRAMEWORK
 )
+
+VIDEO_DATA_SYSTEM_PROMPT = """You are creating fun, engaging data for a "GitHub Wrapped" style video showcasing a developer's year in review.
+
+You will be given GitHub contribution data and pre-computed statistics. Your job is to analyze the contributions and generate creative, celebratory content that would look great in an animated video.
+
+## Your Task
+
+Generate a JSON object with the following structure:
+
+{
+  "heroStats": {
+    "prsMerged": <use the exact number from stats>,
+    "linesAdded": <use the exact number from stats>,
+    "linesRemoved": <use the exact number from stats>,
+    "reviewsGiven": <use the exact number from stats>,
+    "repositoriesContributed": <use the exact number from stats>
+  },
+  "funFacts": [
+    // 3-5 fun, interesting facts about the year's work
+    // Each should have: label (short), value (the impressive stat), detail (fun context)
+    // Examples: biggest PR, busiest month, favorite repo, collaboration stats
+    { "label": "...", "value": "...", "detail": "..." }
+  ],
+  "bigRocks": [
+    // 3-5 major accomplishments - the "big rocks" of the year
+    // Give them catchy, memorable titles (not just PR titles)
+    // Each should have: title (catchy name), repo, impact (1 sentence), linesChanged
+    { "title": "...", "repo": "...", "impact": "...", "linesChanged": <number> }
+  ],
+  "quarterlyActivity": [
+    // Activity for each quarter with a fun highlight
+    { "quarter": "Q1", "prs": <number>, "highlights": "..." },
+    { "quarter": "Q2", "prs": <number>, "highlights": "..." },
+    { "quarter": "Q3", "prs": <number>, "highlights": "..." },
+    { "quarter": "Q4", "prs": <number>, "highlights": "..." }
+  ],
+  "topRepos": [
+    // Top 3-5 repositories by contribution, with a fun fact about each
+    { "name": "...", "prs": <number>, "funFact": "..." }
+  ],
+  "yearInReview": {
+    // A catchy headline and tagline summarizing the year
+    "headline": "...",  // e.g., "The Year of Async", "Infrastructure Hero"
+    "tagline": "..."    // e.g., "117 PRs, 123k lines, one massive architecture overhaul"
+  }
+}
+
+## Guidelines
+
+1. **Use exact stats**: The heroStats numbers must match the provided stats exactly
+2. **Be celebratory**: This is a highlight reel, make it feel like an achievement
+3. **Be creative with titles**: Turn boring PR titles into memorable accomplishments
+4. **Keep it concise**: Video content needs to be punchy and scannable
+5. **Find patterns**: Look for themes, streaks, or interesting correlations
+6. **Make it personal**: Reference specific repos, teammates, and projects
+
+## Important
+
+- Return ONLY valid JSON, no markdown or explanation
+- All numeric values should be actual numbers, not strings
+- Use the exact heroStats values provided - do not recalculate them"""
 
 
 @dataclass
@@ -355,6 +417,67 @@ Write a compelling, evidence-based performance review that I can use as a starti
         
         return f"{header}\n\n{report_content}\n\n{footer}"
     
+    def generate_video_data(self) -> dict:
+        """Generate video-friendly JSON data using the LLM.
+        
+        Returns a structured dictionary optimized for video/animation consumption,
+        with fun facts, big rocks, and celebratory content.
+        """
+        summary = self._prepare_summary()
+        prompt_data = summary.to_prompt_data()
+        
+        # Pre-computed stats that the LLM must use exactly
+        stats = {
+            "prsMerged": summary.total_prs_merged,
+            "linesAdded": summary.total_additions,
+            "linesRemoved": summary.total_deletions,
+            "reviewsGiven": summary.total_reviews_given,
+            "repositoriesContributed": len(summary.repositories_contributed_to),
+        }
+        
+        user_message = f"""Here are the exact statistics to use in heroStats (use these numbers exactly):
+
+{json.dumps(stats, indent=2)}
+
+Here is the full contribution data to analyze:
+
+{prompt_data}
+
+Generate the video data JSON as specified in the system prompt."""
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": VIDEO_DATA_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=4000,
+        )
+        
+        if not response.choices:
+            raise ValueError(
+                f"OpenAI returned no choices for video data. "
+                f"Finish reason: {getattr(response, 'finish_reason', 'unknown')}"
+            )
+        
+        choice = response.choices[0]
+        content = choice.message.content
+        
+        if not content:
+            finish_reason = getattr(choice, 'finish_reason', 'unknown')
+            refusal = getattr(choice.message, 'refusal', None)
+            
+            error_details = [f"Finish reason: {finish_reason}"]
+            if refusal:
+                error_details.append(f"Refusal: {refusal}")
+            
+            raise ValueError(
+                f"OpenAI returned empty content for video data. {'; '.join(error_details)}."
+            )
+        
+        return json.loads(content)
+    
     def _generate_header(self) -> str:
         """Generate the report header."""
         return f"""# Performance Review Self-Assessment - {self.data.year}
@@ -409,5 +532,34 @@ Write a compelling, evidence-based performance review that I can use as a starti
         
         report = self.generate()
         filepath.write_text(report)
+        
+        return filepath
+    
+    def save_video_data(self, output_dir: str = "output") -> Path:
+        """
+        Save video data JSON to a file.
+        
+        Args:
+            output_dir: Directory to save the video data.
+            
+        Returns:
+            Path to the saved file.
+        """
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Generate video data from LLM
+        video_data = self.generate_video_data()
+        
+        # Add meta info
+        video_data["meta"] = {
+            "username": self.data.username,
+            "year": self.data.year,
+            "generatedAt": datetime.now().isoformat(),
+        }
+        
+        filename = f"video-data-{self.data.year}.json"
+        filepath = output_path / filename
+        filepath.write_text(json.dumps(video_data, indent=2))
         
         return filepath
