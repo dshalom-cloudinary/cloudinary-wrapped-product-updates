@@ -1,116 +1,116 @@
 {
   "heroStats": {
-    "prsMerged": 207,
-    "linesAdded": 133515,
-    "linesRemoved": 8226,
-    "reviewsGiven": 269,
+    "prsMerged": 177,
+    "linesAdded": 9392,
+    "linesRemoved": 12295,
+    "reviewsGiven": 138,
     "repositoriesContributed": 5
   },
   "funFacts": [
     {
-      "label": "Mega-PR Moment",
-      "value": 91763,
-      "detail": "Your biggest swing was “Capsule async support” in media_analyzer: +89325/-2438 lines — a full-on architecture upgrade, not just a refactor."
+      "label": "Peak season",
+      "value": 105,
+      "detail": "Q1 was a full-on launch mode: 105 PRs merged before spring even started."
     },
     {
-      "label": "Quarterback Energy",
-      "value": 269,
-      "detail": "You shipped code and coached harder: 269 reviews given, with @cloudinary-pkoniu (47) and @netaeiny (38) as your top collab partners."
+      "label": "The Great Cleanup",
+      "value": 8582,
+      "detail": "Biggest single swing: deleted 8,582 lines in dl_object_detection — the kind of spring cleaning that makes CI breathe easier."
     },
     {
-      "label": "Q1 Was a Launchpad",
+      "label": "Docs that ship",
+      "value": 913,
+      "detail": "Dropped a 913-line Argo Rollouts guide in argocd — turning tribal knowledge into copy-paste superpowers."
+    },
+    {
+      "label": "Human load balancer",
       "value": 77,
-      "detail": "Q1 led the year with 77 merged PRs — including early-year foundation work and a test avalanche that set the pace."
+      "detail": "Most-reviewed teammate: @ylavi-cloudinary with 77 reviews — basically pair-programming at scale."
     },
     {
-      "label": "Testing Tsunami",
-      "value": 16982,
-      "detail": "One PR alone (“Add some tests” in captain-crash-lambda) dropped +16956/-26 lines — the kind of coverage boost that makes on-call quieter."
-    },
-    {
-      "label": "Low-Drama Deletions",
-      "value": 8226,
-      "detail": "You added 133515 lines but only removed 8226 — lots of net-new capability, with cleanup sprinkled in (including a satisfying -98 purge)."
+      "label": "Net line wizardry",
+      "value": 2903,
+      "detail": "More lines removed than added this year (+9,392 / -12,295). Refactors, migrations, and pruning like a pro."
     }
   ],
   "bigRocks": [
     {
-      "title": "Capsule Goes Async (The Big Switch)",
-      "repo": "media_analyzer",
-      "impact": "Introduced truly asynchronous AI Vision analysis with continuation tokens and async RPC flow, unlocking scalable model execution.",
-      "linesChanged": 91763
+      "title": "Cross-Account Backup Vault: DR Mode Activated",
+      "repo": "devops",
+      "impact": "Built a full cross-account AWS Backup solution for Aurora RDS—vaults, KMS, IAM, and plans—locking in a real DR safety net.",
+      "linesChanged": 918
     },
     {
-      "title": "S3-Backed Async Responses",
-      "repo": "media_analyzer",
-      "impact": "Moved async response handling onto S3, reducing pressure on synchronous paths and making result retrieval more resilient.",
-      "linesChanged": 2042
+      "title": "Canary Brain for Argo Rollouts",
+      "repo": "argocd",
+      "impact": "Shipped Datadog-powered canary analysis templates so rollouts can self-validate before users ever feel a bump.",
+      "linesChanged": 656
     },
     {
-      "title": "Captain Crash: From Bot to Incident Wingman",
-      "repo": "captain-crash-lambda",
-      "impact": "Built out Captain Crash’s AI + Slack plumbing (assistant integration, summarization guardrails, alert hygiene) to speed up incident triage.",
-      "linesChanged": 17022
+      "title": "Terraform: VPC Endpoints on Easy Mode",
+      "repo": "k8s-infra",
+      "impact": "Made VPC endpoints configurable and repeatable, then wired staging with the endpoints it needed—cleaner infra, fewer surprises.",
+      "linesChanged": 168
     },
     {
-      "title": "Permissions Power-Ups",
-      "repo": "cloudinary",
-      "impact": "Shipped multiple granular-permissions improvements across folders/assets/metadata, tightening enforcement without breaking workflows.",
-      "linesChanged": 3443
+      "title": "ExternalDNS: The Great Chart Migration",
+      "repo": "k8s-infra",
+      "impact": "Migrated ExternalDNS off the deprecated Bitnami chart to Kubernetes SIGs and fixed config format to stop DNS record conflicts.",
+      "linesChanged": 124
     },
     {
-      "title": "ECS Shutdown: Graceful, Not Hopeful",
-      "repo": "dl_object_detection",
-      "impact": "Implemented graceful ECS task shutdown behavior so deployments and scale events stop being a game of chicken.",
-      "linesChanged": 1776
+      "title": "MCP Server Lands in the Cluster",
+      "repo": "k8s-applications",
+      "impact": "Added the Kubernetes resources for MCP server deployment (RBAC, service account, deployment, service) and wired it into the platform.",
+      "linesChanged": 292
     }
   ],
   "quarterlyActivity": [
     {
       "quarter": "Q1",
-      "prs": 77,
-      "highlights": "Foundation season: big feature drops (Watermark + IQA) plus Captain Crash’s early build-out and guardrails."
+      "prs": 105,
+      "highlights": "Migration + GPU + GitOps season: MMS infra moves, nodepool tuning, and a ton of platform momentum."
     },
     {
       "quarter": "Q2",
-      "prs": 40,
-      "highlights": "Permissions + API craftsmanship: resource-by-IDs endpoints, enforcement polish, and steady reliability fixes."
+      "prs": 31,
+      "highlights": "Stability sprint: capacity tweaks, cert changes, and platform guardrails across clusters."
     },
     {
       "quarter": "Q3",
-      "prs": 24,
-      "highlights": "Quiet but sharp: performance tweaks, targeted bug fixes, and prepping the runway for the Q4 surge."
+      "prs": 18,
+      "highlights": "Observability & operations: n8n fixes, MCP rollout, and signal-cleaning in NGINX logs."
     },
     {
       "quarter": "Q4",
-      "prs": 66,
-      "highlights": "The comeback arc: Capsule async lands, infra and e2e stabilizes, and year-end shipping hits turbo."
+      "prs": 23,
+      "highlights": "Infra polish with impact: backups, canary templates, and VPC endpoint flexibility to close the year strong."
     }
   ],
   "topRepos": [
     {
-      "name": "captain-crash-lambda",
-      "prs": 74,
-      "funFact": "The “incident whisperer” repo: Slack integrations, alert filters, Rollbar/Coralogix summarization, and tons of fast iteration PRs."
+      "name": "k8s-infra",
+      "prs": 49,
+      "funFact": "From VPC endpoints to Karpenter + GPU node wrangling—this repo was your control panel for keeping clusters fast and sane."
     },
     {
-      "name": "cloudinary",
-      "prs": 45,
-      "funFact": "Permissions playground: folders/assets/metadata enforcement work plus customer-impacting fixes (like OAuth + 2FA bulk delete)."
+      "name": "argocd",
+      "prs": 40,
+      "funFact": "You turned GitOps into a safety system: rollouts analysis templates, production ApplicationSet edits, and clean removals with purpose."
     },
     {
-      "name": "media_analyzer",
-      "prs": 43,
-      "funFact": "Home of the heavy hitters: async Capsule support (+89325/-2438) and S3-backed async responses for scalable AI analysis."
+      "name": "devops",
+      "prs": 34,
+      "funFact": "Automation headquarters—backup workflows, monitoring fixes, and even AI review automation (because you optimize everything)."
     }
   ],
   "yearInReview": {
-    "headline": "The Year of Async + Reliability",
-    "tagline": "207 PRs merged, 133515 lines added, 269 reviews given — shipping big platform upgrades while keeping the fleet steady across 5 repos."
+    "headline": "The Year of Safer Deploys",
+    "tagline": "177 PRs merged • 138 reviews • 5 repos • 9,392 lines added / 12,295 removed — shipping cleaner infra, smarter rollouts, and real DR muscle"
   },
   "meta": {
-    "username": "adilester",
+    "username": "galoniz",
     "year": 2025,
-    "generatedAt": "2026-01-28T20:56:55.707533"
+    "generatedAt": "2026-01-29T11:00:20.846622"
   }
 }

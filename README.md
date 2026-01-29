@@ -1,107 +1,105 @@
-# GitHub Wrapped - Performance Review Tool
+# GitHub Wrapped
 
-A CLI tool that fetches your GitHub contributions and generates an **AI-powered performance review** structured around your Execution and Culture framework. Uses OpenAI to create a narrative self-assessment based on your actual work.
+Generate a personalized "Spotify Wrapped"-style video from your GitHub contributions. Fetches your GitHub data, creates an AI-powered analysis, and renders an animated video showcasing your year in code.
 
 ## Features
 
-- **AI-Powered Reports**: Uses OpenAI to generate compelling, evidence-based performance reviews
-- **Framework Aligned**: Addresses Execution (Quality, Time, Focus, Impact) and Culture (Helpful, Customer Value, Healthy Growth, etc.)
-- **Data-Driven**: Backs up claims with real metrics and PR references
-- **Fallback Mode**: Can generate template-based reports without AI
+- **GitHub Data Collection**: Fetches PRs, reviews, commits, and contribution patterns
+- **AI-Powered Analysis**: Uses OpenAI to identify your "big rocks" (major accomplishments) and generate insights
+- **Animated Video**: Renders a Remotion-powered video with stats, charts, and achievements
+- **Customizable**: Personalized with your name, avatar, and actual contribution data
+
+## Quick Start
+
+```bash
+# 1. Setup
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cd wrapped-video && npm install && cd ..
+cp .env.example .env  # Add your GITHUB_TOKEN and OPENAI_API_KEY
+
+# 2. Generate everything (collect data + render video)
+make run username=your-github-username
+
+# Video output: wrapped-video/out/wrapped-video.mp4
+```
 
 ## Setup
 
-1. Clone this repository
-2. Create a virtual environment and install dependencies:
+### Prerequisites
 
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+- Python 3.9+
+- Node.js 18+
+- GitHub Personal Access Token (scopes: `repo`, `read:org`, `read:user`)
+- OpenAI API Key
 
-3. Copy `.env.example` to `.env` and add your API keys:
+### Installation
 
-```bash
-cp .env.example .env
-```
+1. Clone and install Python dependencies:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-4. Configure your `.env` file:
-   - **GitHub Token**: Create a PAT at https://github.com/settings/tokens with scopes:
-     - `repo` - Full control of private repositories
-     - `read:org` - Read org membership
-     - `read:user` - Read user profile data
-   - **OpenAI API Key**: Create one at https://platform.openai.com/api-keys
+2. Install video dependencies:
+   ```bash
+   cd wrapped-video && npm install
+   ```
+
+3. Configure `.env`:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your GITHUB_TOKEN and OPENAI_API_KEY
+   ```
 
 ## Usage
 
+### Full Pipeline (Recommended)
+
 ```bash
-# Generate AI-powered report (default)
-python -m github_wrapped --orgs cloudinary --year 2025
-
-# Multiple organizations
-python -m github_wrapped --orgs cloudinary,other-org --year 2025
-
-# Specific repositories only
-python -m github_wrapped --orgs cloudinary --repos repo1,repo2 --year 2025
-
-# Use a specific OpenAI model
-python -m github_wrapped --orgs cloudinary --model gpt-4o-mini
-
-# Generate template-based report (no AI)
-python -m github_wrapped --orgs cloudinary --no-ai
-
-# Output will be saved to: output/performance-review-2025-ai.md
+make run username=your-github-username
 ```
 
-### CLI Options
+This runs the complete pipeline: collect GitHub data → prepare video data → render video.
 
-| Option | Description |
-|--------|-------------|
-| `--orgs`, `-o` | Comma-separated list of GitHub organizations (required) |
-| `--repos`, `-r` | Specific repository names to include |
-| `--year`, `-y` | Year to generate report for (default: 2025) |
-| `--output`, `-O` | Output directory (default: output) |
-| `--ai/--no-ai` | Use AI for report generation (default: --ai) |
-| `--model`, `-m` | OpenAI model to use (default: gpt-4o) |
-| `--token`, `-t` | GitHub token (or set GITHUB_TOKEN env var) |
-| `--openai-key` | OpenAI API key (or set OPENAI_API_KEY env var) |
+### Individual Steps
 
-## Report Structure
+```bash
+# Step 1: Collect GitHub data and generate AI analysis
+make collect username=your-github-username
 
-The AI-generated report addresses:
+# Step 2: Prepare data for video rendering
+make prepare file=output/video-data-2025-01-29.json
 
-### Execution
-- **Quality**: Bug fixes, refactoring, test coverage
-- **Time**: Quarterly delivery cadence, consistent output
-- **Focus**: Work concentration across repositories/projects
-- **Impact**: Customer-facing features, major accomplishments
+# Step 3: Render the video
+make render
+```
 
-### Culture
-- **We Are All People**: Code reviews, collaboration with teammates
-- **Customer Value First**: Features and improvements delivered
-- **Healthy Growth**: Infrastructure, documentation, automation
-- **Efficient and Impactful**: PR size metrics, focused work
-- **Humble, Helpful, Proud**: Helping others, knowledge sharing
-- **Life & Work**: Sustainable pace indicators
+### Preview in Browser
 
-## How It Works
+```bash
+cd wrapped-video && npm start
+```
 
-1. **Fetches** your GitHub contributions (PRs, reviews, commits)
-2. **Categorizes** work by type (feature, bugfix, infrastructure, etc.)
-3. **Identifies** major accomplishments ("big rocks")
-4. **Sends** structured data to OpenAI with the performance framework
-5. **Generates** a narrative self-assessment with evidence
+Opens Remotion Studio to preview and edit scenes before rendering.
 
-## Data Collected
+## Project Structure
 
-- Pull Requests you authored (with descriptions, size, labels)
-- Code reviews you gave to teammates
-- Commit activity by repository
-- Quarterly distribution of work
+```
+├── github_wrapped/      # Python CLI for data collection
+│   ├── data_fetcher.py  # GitHub API integration
+│   ├── categorizer.py   # PR categorization logic
+│   └── llm_report_generator.py  # AI analysis
+├── wrapped-video/       # Remotion video project
+│   ├── src/scenes/      # Video scene components
+│   └── public/          # Static assets (images, audio)
+├── output/              # Generated data files
+└── Makefile             # Build automation
+```
 
 ## Privacy
 
-- All data stays between you and GitHub/OpenAI
+- All data stays between you, GitHub, and OpenAI
 - No data is stored or sent elsewhere
-- You can use `--no-ai` to avoid sending data to OpenAI
+- Generated videos are saved locally
