@@ -30,8 +30,8 @@ make run username=your-github-username
 
 - Python 3.9+
 - Node.js 18+
-- GitHub Personal Access Token (scopes: `repo`, `read:org`, `read:user`)
 - OpenAI API Key
+- GitHub Personal Access Token (optional - will use device auth flow if not provided)
 
 ### Installation
 
@@ -50,7 +50,8 @@ make run username=your-github-username
 3. Configure `.env`:
    ```bash
    cp .env.example .env
-   # Edit .env with your GITHUB_TOKEN and OPENAI_API_KEY
+   # Edit .env with your OPENAI_API_KEY (required)
+   # GITHUB_TOKEN is optional - if not set, you'll authenticate via browser
    ```
 
 ## Usage
