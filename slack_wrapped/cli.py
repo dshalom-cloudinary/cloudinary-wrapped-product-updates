@@ -21,6 +21,198 @@ app = typer.Typer(
 console = Console()
 
 
+# ============================================================================
+# SETUP COMMAND - Interactive data preparation
+# ============================================================================
+
+@app.command()
+def setup(
+    data: str = typer.Option(
+        ...,
+        "--data",
+        "-d",
+        help="Path to raw Slack messages text file.",
+    ),
+    output: str = typer.Option(
+        "output",
+        "--output",
+        "-o",
+        help="Directory to save generated config.",
+    ),
+    openai_key: Optional[str] = typer.Option(
+        None,
+        "--openai-key",
+        envvar="OPENAI_API_KEY",
+        help="OpenAI API key for AI-powered analysis.",
+    ),
+):
+    """
+    Interactive setup wizard for Slack Wrapped.
+    
+    Analyzes your Slack messages using AI and guides you through
+    creating a configuration file with team structure, display names,
+    and preferences.
+    """
+    from .parser import SlackParser, ParserError
+    from .llm_client import create_llm_client, LLMError
+    from .message_analyzer import MessageAnalyzer
+    from .interactive import run_interactive_setup, review_config, save_config, confirm_proceed
+    from .config_generator import ConfigGenerator
+    
+    console.print(f"\n[bold cyan]Slack Wrapped[/bold cyan] - Interactive Setup\n")
+    
+    # Validate data file
+    data_path = Path(data)
+    if not data_path.exists():
+        console.print(f"[red]Error:[/red] Data file not found: {data}")
+        raise typer.Exit(1)
+    
+    # Parse messages
+    console.print(f"[cyan]Parsing messages...[/cyan]")
+    parser = SlackParser()
+    try:
+        messages = parser.parse_file(str(data_path))
+        console.print(f"[green]✓[/green] Parsed {len(messages)} messages")
+    except ParserError as e:
+        console.print(f"[red]Error parsing messages:[/red] {e}")
+        raise typer.Exit(1)
+    
+    # Analyze with LLM if API key available
+    if openai_key:
+        console.print(f"[cyan]Analyzing messages with AI...[/cyan]")
+        try:
+            llm = create_llm_client(api_key=openai_key)
+            analyzer = MessageAnalyzer(llm)
+            analysis = analyzer.analyze(messages)
+            console.print(f"[green]✓[/green] AI analysis complete")
+        except LLMError as e:
+            console.print(f"[yellow]Warning:[/yellow] AI analysis failed: {e}")
+            console.print("Continuing with basic analysis...")
+            analysis = _basic_analysis(messages)
+    else:
+        console.print("[yellow]Note:[/yellow] No OpenAI API key - using basic analysis")
+        analysis = _basic_analysis(messages)
+    
+    # Run interactive setup
+    answers = run_interactive_setup(analysis)
+    
+    # Generate config
+    generator = ConfigGenerator(analysis, answers)
+    config_dict = generator.generate()
+    
+    # Review config
+    config_dict = review_config(config_dict)
+    
+    # Save config
+    output_path = Path(output)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    channel_name = config_dict.get("channel", {}).get("name", "channel")
+    config_file = output_path / f"config-{channel_name}.json"
+    save_config(config_dict, str(config_file))
+    
+    # Ask about proceeding
+    if confirm_proceed():
+        console.print("\n[cyan]To generate the video, run:[/cyan]")
+        console.print(f"  python -m slack_wrapped generate --data {data} --config {config_file}")
+    
+    console.print("\n[bold green]Setup complete![/bold green]\n")
+
+
+def _basic_analysis(messages):
+    """Create basic analysis without LLM."""
+    from collections import Counter
+    from .message_analyzer import (
+        AnalysisResult, ChannelAnalysis, UserSuggestion,
+        TeamSuggestion, Highlight, Question
+    )
+    
+    usernames = set()
+    message_counts = Counter()
+    min_date = max_date = None
+    
+    for msg in messages:
+        usernames.add(msg.username)
+        message_counts[msg.username] += 1
+        if min_date is None or msg.timestamp < min_date:
+            min_date = msg.timestamp
+        if max_date is None or msg.timestamp > max_date:
+            max_date = msg.timestamp
+    
+    sorted_users = sorted(usernames)
+    
+    user_suggestions = []
+    for u in sorted_users:
+        suggested = " ".join(p.capitalize() for p in u.replace("_", ".").split("."))
+        user_suggestions.append(UserSuggestion(
+            username=u,
+            suggested_name=suggested,
+            message_count=message_counts[u],
+            confidence="low",
+        ))
+    
+    return AnalysisResult(
+        total_messages=len(messages),
+        date_range=(min_date, max_date),
+        usernames=sorted_users,
+        message_counts=dict(message_counts),
+        channel_analysis=ChannelAnalysis(),
+        team_suggestions=[],
+        user_suggestions=user_suggestions,
+        highlights=[],
+        questions=[],
+        messages=messages,
+    )
+
+
+# ============================================================================
+# SERVE COMMAND - Web UI
+# ============================================================================
+
+@app.command()
+def serve(
+    data: Optional[str] = typer.Option(
+        None,
+        "--data",
+        "-d",
+        help="Optional path to pre-load messages from.",
+    ),
+    port: int = typer.Option(
+        8080,
+        "--port",
+        "-p",
+        help="Port to run the web server on.",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Don't open browser automatically.",
+    ),
+):
+    """
+    Start web-based setup wizard.
+    
+    Opens a browser-based UI for interactive setup. Useful when you prefer
+    a graphical interface over the terminal.
+    """
+    from .web_server import run_server
+    
+    console.print(f"\n[bold cyan]Slack Wrapped[/bold cyan] - Web Setup\n")
+    console.print(f"Starting server on port {port}...")
+    console.print(f"[cyan]Open http://localhost:{port} in your browser[/cyan]\n")
+    
+    run_server(
+        data_file=data,
+        port=port,
+        open_browser=not no_browser,
+    )
+
+
+# ============================================================================
+# GENERATE COMMAND (existing, with --interactive flag)
+# ============================================================================
+
+
 @app.command()
 def generate(
     data: str = typer.Option(
@@ -29,8 +221,8 @@ def generate(
         "-d",
         help="Path to raw Slack messages text file.",
     ),
-    config: str = typer.Option(
-        ...,
+    config: Optional[str] = typer.Option(
+        None,
         "--config",
         "-c",
         help="Path to config.json file with channel info and user mappings.",
@@ -68,6 +260,12 @@ def generate(
         "--content-model",
         help="Model for content analysis pass (default: o3-mini/GPT-5.2 Thinking).",
     ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Run interactive setup wizard before generating (no config file needed).",
+    ),
 ):
     """
     Generate a Slack Wrapped video from channel messages.
@@ -77,17 +275,76 @@ def generate(
     
     By default, uses two-pass content analysis for deeper semantic insights.
     Use --skip-content-analysis for faster single-pass mode.
+    
+    Use --interactive to run the setup wizard first (no config file needed).
     """
     console.print(f"\n[bold]Slack Wrapped[/bold] - Video Generator\n")
     
-    # Validate input files exist
+    # Validate data file
     data_path = Path(data)
-    config_path = Path(config)
-    
     if not data_path.exists():
         console.print(f"[red]Error:[/red] Data file not found: {data}")
         raise typer.Exit(1)
     
+    # Interactive mode - run setup first
+    if interactive:
+        from .parser import SlackParser, ParserError
+        from .llm_client import create_llm_client, LLMError
+        from .message_analyzer import MessageAnalyzer
+        from .interactive import run_interactive_setup, review_config
+        from .config_generator import ConfigGenerator
+        
+        console.print("[cyan]Running interactive setup...[/cyan]\n")
+        
+        # Parse messages
+        parser = SlackParser()
+        try:
+            messages = parser.parse_file(str(data_path))
+            console.print(f"[green]✓[/green] Parsed {len(messages)} messages")
+        except ParserError as e:
+            console.print(f"[red]Error parsing messages:[/red] {e}")
+            raise typer.Exit(1)
+        
+        # Analyze with LLM
+        if openai_key:
+            try:
+                llm = create_llm_client(api_key=openai_key)
+                analyzer = MessageAnalyzer(llm)
+                analysis = analyzer.analyze(messages)
+            except LLMError as e:
+                console.print(f"[yellow]Warning:[/yellow] AI analysis failed: {e}")
+                analysis = _basic_analysis(messages)
+        else:
+            analysis = _basic_analysis(messages)
+        
+        # Run interactive setup
+        answers = run_interactive_setup(analysis)
+        
+        # Generate config
+        generator = ConfigGenerator(analysis, answers)
+        config_dict = generator.generate()
+        config_dict = review_config(config_dict)
+        
+        # Save config
+        output_path = Path(output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        channel_name = config_dict.get("channel", {}).get("name", "channel")
+        config_file = output_path / f"config-{channel_name}.json"
+        
+        import json
+        with open(config_file, "w") as f:
+            json.dump(config_dict, f, indent=2)
+        
+        console.print(f"[green]✓[/green] Config saved to: {config_file}")
+        config = str(config_file)
+    
+    # Validate config file
+    if not config:
+        console.print("[red]Error:[/red] Config file required. Use --config or --interactive")
+        raise typer.Exit(1)
+    
+    config_path = Path(config)
     if not config_path.exists():
         console.print(f"[red]Error:[/red] Config file not found: {config}")
         raise typer.Exit(2)
