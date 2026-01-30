@@ -20,6 +20,7 @@ from .message_analyzer import MessageAnalyzer, AnalysisResult
 from .config_generator import ConfigGenerator, generate_config
 from .parser import SlackParser, ParserError
 from .llm_client import LLMClient, create_llm_client, LLMError
+from .file_extractor import extract_text_from_file, FileExtractionError
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,11 @@ SETUP_HTML = """
             
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">Message File</label>
-                <input type="file" id="file-input" accept=".txt,.log" 
+                <input type="file" id="file-input" accept=".txt,.log,.md,.markdown,.pdf" 
                     class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 
                            file:rounded file:border-0 file:text-sm file:font-semibold 
                            file:bg-cyan-600 file:text-white hover:file:bg-cyan-700 cursor-pointer">
+                <p class="text-xs text-gray-500 mt-1">Supports: TXT, MD, PDF, LOG files</p>
             </div>
             
             <div class="mb-4">
@@ -272,13 +274,25 @@ python -m slack_wrapped generate \\
             const errorEl = document.getElementById('upload-error');
             
             let messages = textInput.value.trim();
+            let fileData = null;
+            let filename = null;
             
             // Read file if uploaded
             if (fileInput.files.length > 0) {
-                messages = await fileInput.files[0].text();
+                const file = fileInput.files[0];
+                filename = file.name;
+                
+                // For PDF files, send as base64
+                if (filename.toLowerCase().endsWith('.pdf')) {
+                    const buffer = await file.arrayBuffer();
+                    fileData = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+                } else {
+                    // For text files, read as text
+                    messages = await file.text();
+                }
             }
             
-            if (!messages) {
+            if (!messages && !fileData) {
                 errorEl.textContent = 'Please upload a file or paste messages';
                 errorEl.classList.remove('hidden');
                 return;
@@ -291,7 +305,11 @@ python -m slack_wrapped generate \\
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages })
+                    body: JSON.stringify({ 
+                        messages: messages || null,
+                        file_data: fileData,
+                        filename: filename
+                    })
                 });
                 
                 const data = await response.json();
@@ -466,11 +484,30 @@ async def analyze_messages(request: Request):
     Analyze uploaded messages and return insights.
     
     Expects JSON body with:
-    - messages: string of raw Slack messages
+    - messages: string of raw Slack messages (for text files)
+    - file_data: base64 encoded file content (for PDF files)
+    - filename: original filename (for format detection)
     """
     try:
         data = await request.json()
         messages_text = data.get("messages", "")
+        file_data = data.get("file_data")
+        filename = data.get("filename", "")
+        
+        # Handle file upload (PDF or other binary)
+        if file_data and filename:
+            import base64
+            try:
+                file_bytes = base64.b64decode(file_data)
+                messages_text = extract_text_from_file(
+                    file_content=file_bytes,
+                    filename=filename,
+                )
+            except FileExtractionError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.exception("File extraction failed")
+                raise HTTPException(status_code=400, detail=f"Failed to extract text from file: {e}")
         
         if not messages_text:
             raise HTTPException(status_code=400, detail="No messages provided")
