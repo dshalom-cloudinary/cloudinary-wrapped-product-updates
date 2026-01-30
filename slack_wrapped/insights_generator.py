@@ -760,7 +760,7 @@ def generate_two_pass_insights(
     top_emoji: list[tuple[str, int]],
     favorite_words: dict[str, list[tuple[str, int]]],
     team_stats: Optional[dict[str, dict]] = None,
-    content_model: str = "gpt-5.2-thinking",
+    content_model: str = "gpt-4o",
 ) -> TwoPassResult:
     """
     Generate insights using two-pass content analysis.
@@ -778,7 +778,7 @@ def generate_two_pass_insights(
         top_emoji: Most used emoji
         favorite_words: Favorite words by username
         team_stats: Optional team comparison statistics
-        content_model: Model to use for content analysis (default: gpt-5.2-thinking)
+        content_model: Model to use for content analysis (default: gpt-4o)
         
     Returns:
         TwoPassResult with content summaries, video insights, and backward-compatible data

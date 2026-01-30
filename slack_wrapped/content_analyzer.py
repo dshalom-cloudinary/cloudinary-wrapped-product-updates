@@ -142,7 +142,7 @@ class ContentAnalyzer:
     """Analyzes message content for semantic meaning using GPT-5.2 Thinking."""
     
     # Default model for content analysis
-    DEFAULT_MODEL = "gpt-5.2-thinking"
+    DEFAULT_MODEL = "gpt-4o"
     
     def __init__(
         self,
