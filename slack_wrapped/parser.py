@@ -4,11 +4,14 @@ Parses various Slack message formats into structured SlackMessage objects.
 """
 
 import re
+import logging
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
 
 from .models import SlackMessage
+
+logger = logging.getLogger(__name__)
 
 
 class ParserError(Exception):
@@ -45,6 +48,30 @@ class SlackParser:
         r'^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\s+(\S+):\s*(.+)$'
     )
     
+    # Pattern 6: Slack copy-paste format - "David Shalom  10:23 AM" followed by message on next line
+    # This is handled specially in multi-line mode
+    PATTERN_SLACK_HEADER = re.compile(
+        r'^([A-Za-z][A-Za-z0-9\s\.\-_]+?)\s{2,}(\d{1,2}:\d{2}\s*[AP]M|\d{1,2}:\d{2})$',
+        re.IGNORECASE
+    )
+    
+    # Pattern 7: Discord-like format - "username — Today at 10:23 AM" or "username — 01/15/2025 10:23 AM"
+    PATTERN_DISCORD = re.compile(
+        r'^([A-Za-z][A-Za-z0-9\s\.\-_]+?)\s*[—–-]\s*(?:Today at\s+)?(\d{1,2}:\d{2}\s*[AP]M|\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s*[AP]M?)$',
+        re.IGNORECASE
+    )
+    
+    # Pattern 8: Simple username: message (no timestamp) - "david.shalom: Hello everyone"
+    PATTERN_NO_TIMESTAMP = re.compile(
+        r'^([A-Za-z][A-Za-z0-9\.\-_]{2,}):\s+(.+)$'
+    )
+    
+    # Pattern 9: Slack export JSON-style - will be handled separately
+    # Pattern 10: Name with spaces and colon - "David Shalom: Hello everyone"
+    PATTERN_NAME_COLON = re.compile(
+        r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+):\s+(.+)$'
+    )
+    
     # System message patterns to skip
     SYSTEM_PATTERNS = [
         re.compile(r'^(joined|left)\s+the\s+channel', re.IGNORECASE),
@@ -69,13 +96,16 @@ class SlackParser:
             "skipped_system": 0,
             "parse_errors": 0,
         }
+        self.failed_lines: list[str] = []  # Store sample of failed lines for debugging
+        self.debug_mode = False
     
-    def parse(self, raw_text: str) -> list[SlackMessage]:
+    def parse(self, raw_text: str, debug: bool = False) -> list[SlackMessage]:
         """
         Parse raw text into SlackMessage objects.
         
         Args:
             raw_text: Raw message text, one message per line
+            debug: If True, log detailed parsing information
             
         Returns:
             List of parsed SlackMessage objects
@@ -83,6 +113,7 @@ class SlackParser:
         Raises:
             ParserError: If no messages could be parsed
         """
+        self.debug_mode = debug
         self.stats = {
             "total_lines": 0,
             "parsed_messages": 0,
@@ -90,12 +121,29 @@ class SlackParser:
             "skipped_system": 0,
             "parse_errors": 0,
         }
+        self.failed_lines = []
         
         messages = []
         lines = raw_text.strip().split('\n')
         self.stats["total_lines"] = len(lines)
         
-        for line in lines:
+        logger.info(f"Starting to parse {len(lines)} lines")
+        
+        # First, try to detect the format from sample lines
+        detected_format = self._detect_format(lines[:50])
+        if detected_format:
+            logger.info(f"Detected message format: {detected_format}")
+        
+        # Try multi-line parsing for Slack copy-paste format
+        if detected_format == "slack_multiline":
+            messages = self._parse_multiline_slack(lines)
+            if messages:
+                self.stats["parsed_messages"] = len(messages)
+                logger.info(f"Parsed {len(messages)} messages using multi-line Slack format")
+                return messages
+        
+        # Standard line-by-line parsing
+        for i, line in enumerate(lines):
             line = line.strip()
             
             # Skip empty lines
@@ -110,24 +158,186 @@ class SlackParser:
                 # Check if it's a system message
                 if self._is_system_message(message.message):
                     self.stats["skipped_system"] += 1
+                    if self.debug_mode:
+                        logger.debug(f"Line {i+1}: Skipped system message: {line[:80]}")
                     continue
                     
                 messages.append(message)
                 self.stats["parsed_messages"] += 1
+                if self.debug_mode and self.stats["parsed_messages"] <= 3:
+                    logger.debug(f"Line {i+1}: Successfully parsed: {line[:80]}")
             else:
                 self.stats["parse_errors"] += 1
+                # Store sample of failed lines (up to 10)
+                if len(self.failed_lines) < 10:
+                    self.failed_lines.append(line[:200])
+                if self.debug_mode and self.stats["parse_errors"] <= 5:
+                    logger.debug(f"Line {i+1}: Failed to parse: {line[:80]}")
+        
+        # Log parsing summary
+        logger.info(
+            f"Parsing complete: {self.stats['parsed_messages']} messages parsed, "
+            f"{self.stats['parse_errors']} failed, "
+            f"{self.stats['skipped_empty']} empty, "
+            f"{self.stats['skipped_system']} system"
+        )
         
         if not messages:
-            raise ParserError(
+            # Build detailed error with sample failed lines
+            error_msg = (
                 f"No messages could be parsed. "
                 f"Total lines: {self.stats['total_lines']}, "
                 f"Empty: {self.stats['skipped_empty']}, "
                 f"System: {self.stats['skipped_system']}, "
-                f"Parse errors: {self.stats['parse_errors']}. "
-                f"Expected format: '[timestamp] username: message' or 'username [time]: message'"
+                f"Parse errors: {self.stats['parse_errors']}."
             )
+            
+            if self.failed_lines:
+                error_msg += "\n\nSample lines that failed to parse:\n"
+                for i, line in enumerate(self.failed_lines[:5], 1):
+                    error_msg += f"  {i}. {line}\n"
+                error_msg += "\nExpected formats:\n"
+                error_msg += "  - 2025-01-15T09:30:00Z username: message\n"
+                error_msg += "  - [1/15/2025 9:30 AM] username: message\n"
+                error_msg += "  - username [09:30]: message\n"
+                error_msg += "  - David Shalom: message\n"
+            
+            logger.error(error_msg)
+            raise ParserError(error_msg)
         
         return messages
+    
+    def _detect_format(self, sample_lines: list[str]) -> Optional[str]:
+        """Detect the message format from sample lines."""
+        iso_count = 0
+        us_count = 0
+        simple_count = 0
+        slack_header_count = 0
+        name_colon_count = 0
+        no_timestamp_count = 0
+        
+        for line in sample_lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            if self.PATTERN_ISO.match(line):
+                iso_count += 1
+            elif self.PATTERN_US.match(line):
+                us_count += 1
+            elif self.PATTERN_SIMPLE.match(line):
+                simple_count += 1
+            elif self.PATTERN_SLACK_HEADER.match(line):
+                slack_header_count += 1
+            elif self.PATTERN_NAME_COLON.match(line):
+                name_colon_count += 1
+            elif self.PATTERN_NO_TIMESTAMP.match(line):
+                no_timestamp_count += 1
+        
+        # Determine dominant format
+        counts = {
+            "iso": iso_count,
+            "us": us_count,
+            "simple": simple_count,
+            "slack_multiline": slack_header_count,
+            "name_colon": name_colon_count,
+            "no_timestamp": no_timestamp_count,
+        }
+        
+        max_format = max(counts, key=counts.get)
+        if counts[max_format] > 2:
+            logger.debug(f"Format detection counts: {counts}")
+            return max_format
+        
+        return None
+    
+    def _parse_multiline_slack(self, lines: list[str]) -> list[SlackMessage]:
+        """
+        Parse Slack copy-paste format where header and message are on separate lines.
+        
+        Format:
+        David Shalom  10:23 AM
+        Hello everyone, this is my message
+        
+        Alice Smith  10:25 AM
+        Thanks for sharing!
+        """
+        messages = []
+        current_header = None
+        current_message_lines = []
+        
+        for line in lines:
+            line_stripped = line.strip()
+            
+            # Check if this is a header line
+            header_match = self.PATTERN_SLACK_HEADER.match(line_stripped)
+            
+            if header_match:
+                # Save previous message if exists
+                if current_header and current_message_lines:
+                    username, time_str = current_header
+                    message_text = " ".join(current_message_lines)
+                    if message_text:
+                        timestamp = self._parse_slack_time(time_str)
+                        # Convert display name to username format
+                        username_clean = username.strip().lower().replace(" ", ".")
+                        messages.append(SlackMessage(
+                            timestamp=timestamp,
+                            username=username_clean,
+                            message=message_text,
+                        ))
+                
+                # Start new message
+                current_header = header_match.groups()
+                current_message_lines = []
+            elif line_stripped and current_header:
+                # This is message content
+                current_message_lines.append(line_stripped)
+            elif not line_stripped and current_header and current_message_lines:
+                # Empty line after message - save and reset
+                username, time_str = current_header
+                message_text = " ".join(current_message_lines)
+                if message_text:
+                    timestamp = self._parse_slack_time(time_str)
+                    username_clean = username.strip().lower().replace(" ", ".")
+                    messages.append(SlackMessage(
+                        timestamp=timestamp,
+                        username=username_clean,
+                        message=message_text,
+                    ))
+                current_header = None
+                current_message_lines = []
+        
+        # Don't forget the last message
+        if current_header and current_message_lines:
+            username, time_str = current_header
+            message_text = " ".join(current_message_lines)
+            if message_text:
+                timestamp = self._parse_slack_time(time_str)
+                username_clean = username.strip().lower().replace(" ", ".")
+                messages.append(SlackMessage(
+                    timestamp=timestamp,
+                    username=username_clean,
+                    message=message_text,
+                ))
+        
+        return messages
+    
+    def _parse_slack_time(self, time_str: str) -> datetime:
+        """Parse Slack-style time (10:23 AM or 10:23)."""
+        time_str = time_str.strip()
+        try:
+            if 'AM' in time_str.upper() or 'PM' in time_str.upper():
+                time_obj = datetime.strptime(time_str.upper(), "%I:%M %p")
+            else:
+                time_obj = datetime.strptime(time_str, "%H:%M")
+            
+            return datetime(
+                self.default_year, 1, 1,
+                time_obj.hour, time_obj.minute, 0
+            )
+        except ValueError:
+            return datetime(self.default_year, 1, 1, 12, 0, 0)
     
     def _parse_line(self, line: str) -> Optional[SlackMessage]:
         """Try to parse a single line using all known patterns."""
@@ -169,6 +379,22 @@ class SlackParser:
             timestamp = self._parse_date_space_timestamp(timestamp_str)
             if timestamp:
                 return SlackMessage(timestamp=timestamp, username=username, message=message)
+        
+        # Try Pattern 10: Name with colon (e.g., "David Shalom: Hello")
+        match = self.PATTERN_NAME_COLON.match(line)
+        if match:
+            display_name, message = match.groups()
+            # Convert display name to username format
+            username = display_name.strip().lower().replace(" ", ".")
+            timestamp = datetime(self.default_year, 1, 1, 12, 0, 0)
+            return SlackMessage(timestamp=timestamp, username=username, message=message)
+        
+        # Try Pattern 8: Simple username: message (no timestamp)
+        match = self.PATTERN_NO_TIMESTAMP.match(line)
+        if match:
+            username, message = match.groups()
+            timestamp = datetime(self.default_year, 1, 1, 12, 0, 0)
+            return SlackMessage(timestamp=timestamp, username=username, message=message)
         
         return None
     

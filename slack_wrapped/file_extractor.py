@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class FileExtractionError(Exception):
@@ -40,6 +41,8 @@ def extract_text_from_file(
     Raises:
         FileExtractionError: If extraction fails
     """
+    logger.info(f"extract_text_from_file called: file_path={file_path}, filename={filename}, content_size={len(file_content) if file_content else 0}")
+    
     # Determine file extension
     if file_path:
         path = Path(file_path)
@@ -50,26 +53,38 @@ def extract_text_from_file(
     else:
         ext = ".txt"  # Default to plain text
     
+    logger.info(f"Detected extension: {ext}")
+    
     # Read file content if path provided
     if file_path and not file_content:
         path = Path(file_path)
         if not path.exists():
+            logger.error(f"File not found: {file_path}")
             raise FileExtractionError(f"File not found: {file_path}")
         
         if ext == ".pdf":
             file_content = path.read_bytes()
+            logger.info(f"Read PDF file: {len(file_content)} bytes")
         else:
             try:
-                return path.read_text(encoding="utf-8")
+                text = path.read_text(encoding="utf-8")
+                logger.info(f"Read text file (UTF-8): {len(text)} characters")
+                return text
             except UnicodeDecodeError:
                 # Try with latin-1 as fallback
-                return path.read_text(encoding="latin-1")
+                text = path.read_text(encoding="latin-1")
+                logger.info(f"Read text file (latin-1 fallback): {len(text)} characters")
+                return text
     
     # Handle different formats
     if ext == ".pdf":
+        logger.info("Extracting text from PDF")
         return _extract_from_pdf(file_content, filename)
     elif ext in (".txt", ".md", ".log", ".text", ".markdown"):
-        return _extract_from_text(file_content)
+        logger.info(f"Extracting text from {ext} file")
+        text = _extract_from_text(file_content)
+        logger.info(f"Extracted {len(text)} characters from text file")
+        return text
     else:
         # Try to treat as plain text
         logger.warning(f"Unknown file extension '{ext}', treating as plain text")

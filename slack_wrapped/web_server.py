@@ -6,6 +6,7 @@ Provides a web-based UI for the interactive setup wizard.
 import json
 import logging
 import os
+import sys
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -22,7 +23,21 @@ from .parser import SlackParser, ParserError
 from .llm_client import LLMClient, create_llm_client, LLMError
 from .file_extractor import extract_text_from_file, FileExtractionError
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Set log levels for our modules
+logging.getLogger('slack_wrapped').setLevel(logging.DEBUG)
+logging.getLogger('slack_wrapped.parser').setLevel(logging.DEBUG)
+logging.getLogger('slack_wrapped.message_analyzer').setLevel(logging.DEBUG)
+logging.getLogger('slack_wrapped.file_extractor').setLevel(logging.DEBUG)
 
 # Create FastAPI app
 app = FastAPI(
@@ -494,29 +509,46 @@ async def analyze_messages(request: Request):
         file_data = data.get("file_data")
         filename = data.get("filename", "")
         
+        logger.info(f"Analyze request received: filename={filename}, has_file_data={bool(file_data)}, text_length={len(messages_text) if messages_text else 0}")
+        
         # Handle file upload (PDF or other binary)
         if file_data and filename:
             import base64
+            logger.info(f"Processing file upload: {filename}")
             try:
                 file_bytes = base64.b64decode(file_data)
+                logger.info(f"Decoded file: {len(file_bytes)} bytes")
                 messages_text = extract_text_from_file(
                     file_content=file_bytes,
                     filename=filename,
                 )
+                logger.info(f"Extracted text: {len(messages_text)} characters")
             except FileExtractionError as e:
+                logger.error(f"File extraction error: {e}")
                 raise HTTPException(status_code=400, detail=str(e))
             except Exception as e:
                 logger.exception("File extraction failed")
                 raise HTTPException(status_code=400, detail=f"Failed to extract text from file: {e}")
         
         if not messages_text:
+            logger.warning("No messages provided in request")
             raise HTTPException(status_code=400, detail="No messages provided")
         
-        # Parse messages
+        # Log sample of input for debugging
+        lines = messages_text.strip().split('\n')
+        logger.info(f"Input has {len(lines)} lines")
+        if lines:
+            logger.debug(f"First 3 lines sample:")
+            for i, line in enumerate(lines[:3]):
+                logger.debug(f"  Line {i+1}: {line[:100]}")
+        
+        # Parse messages with debug mode
         parser = SlackParser()
         try:
-            messages = parser.parse(messages_text)
+            messages = parser.parse(messages_text, debug=True)
+            logger.info(f"Successfully parsed {len(messages)} messages")
         except ParserError as e:
+            logger.error(f"Parser error: {e}")
             raise HTTPException(status_code=400, detail=str(e))
         
         # Check for OpenAI API key
