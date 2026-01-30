@@ -2,7 +2,7 @@
 
 ## Cloudinary-Wrapped: GitHub Wrapped Video Generator
 
-**Repository**: `cloudinary-hackathons/cloudinary-wrapped`  
+**Repository**: `dshalom-cloudinary/cloudinary-wrapped-product-updates`  
 **Documentation Date**: January 30, 2026  
 **Purpose**: A "Spotify Wrapped"-style video generator for GitHub contributions that fetches GitHub data, analyzes it with OpenAI, and renders an animated video using Remotion.
 
