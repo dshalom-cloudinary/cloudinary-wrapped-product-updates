@@ -41,6 +41,17 @@ class Preferences:
 
 
 @dataclass
+class ChannelContext:
+    """Contextual information about the channel content."""
+    
+    purpose: str = ""  # What this channel is used for
+    major_themes: list[str] = field(default_factory=list)  # Main topics discussed
+    key_milestones: list[str] = field(default_factory=list)  # Important events/achievements
+    tone: str = ""  # casual, formal, celebratory, technical
+    highlights: list[str] = field(default_factory=list)  # Notable quotes or messages
+
+
+@dataclass
 class Config:
     """Complete configuration for Slack Wrapped."""
     
@@ -48,6 +59,7 @@ class Config:
     teams: list[TeamConfig] = field(default_factory=list)
     user_mappings: list[UserMapping] = field(default_factory=list)
     preferences: Preferences = field(default_factory=Preferences)
+    context: ChannelContext = field(default_factory=ChannelContext)
     
     def get_display_name(self, username: str) -> str:
         """Get display name for a username, or return username if not mapped."""
@@ -110,11 +122,22 @@ class Config:
             top_contributors_count=prefs_data.get("topContributorsCount", 5),
         )
         
+        # Parse context (optional) - semantic understanding of the channel
+        context_data = data.get("context", {})
+        context = ChannelContext(
+            purpose=context_data.get("channelPurpose", context_data.get("purpose", "")),
+            major_themes=context_data.get("majorThemes", context_data.get("major_themes", [])),
+            key_milestones=context_data.get("keyMilestones", context_data.get("key_milestones", [])),
+            tone=context_data.get("tone", ""),
+            highlights=context_data.get("highlights", []),
+        )
+        
         return cls(
             channel=channel,
             teams=teams,
             user_mappings=user_mappings,
             preferences=preferences,
+            context=context,
         )
     
     @classmethod

@@ -67,6 +67,11 @@ INSIGHTS_PROMPT_TEMPLATE = """Create a DATA-DRIVEN "Wrapped" analysis. Every out
 CHANNEL: {channel_name} | YEAR: {year}
 
 ══════════════════════════════════════════════════════════════════════
+                         CHANNEL CONTEXT
+══════════════════════════════════════════════════════════════════════
+{channel_context}
+
+══════════════════════════════════════════════════════════════════════
                          RAW DATA
 ══════════════════════════════════════════════════════════════════════
 
@@ -329,9 +334,25 @@ class InsightsGenerator:
         words_str = ", ".join(f"{w} ({c}x)" for w, c in top_words[:5])
         emoji_str = "".join(e for e, _ in top_emoji[:5]) if top_emoji else "None"
         
+        # Build channel context section
+        context_lines = []
+        if self.config.context.purpose:
+            context_lines.append(f"Purpose: {self.config.context.purpose}")
+        if self.config.context.major_themes:
+            context_lines.append(f"Main Themes: {', '.join(self.config.context.major_themes)}")
+        if self.config.context.key_milestones:
+            context_lines.append(f"Key Milestones: {', '.join(self.config.context.key_milestones)}")
+        if self.config.context.tone:
+            context_lines.append(f"Tone: {self.config.context.tone}")
+        if self.config.context.highlights:
+            context_lines.append(f"Notable Highlights: {', '.join(self.config.context.highlights[:3])}")
+        
+        channel_context = "\n".join(context_lines) if context_lines else "No additional context provided"
+        
         prompt = INSIGHTS_PROMPT_TEMPLATE.format(
             channel_name=self.config.channel.name,
             year=self.config.channel.year,
+            channel_context=channel_context,
             total_messages=stats.total_messages,
             total_words=stats.total_words,
             total_contributors=stats.total_contributors,

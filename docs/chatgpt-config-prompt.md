@@ -61,28 +61,59 @@ You will receive TWO inputs from me:
 1. **INSTRUCTIONS** - My team structure, display names, and context
 2. **RAW SLACK MESSAGES** - The actual messages from my Slack channel
 
-Please do the following:
+IMPORTANT: Do NOT generate output files immediately! First analyze and ask me questions.
 
-## STEP 1: Parse My Instructions
-Read my instructions to understand:
-- Channel name and year
-- Team structure (who belongs to which team)
-- Display name mappings (slack username → full name)
-- Any special context about the channel
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: ANALYZE & ASK QUESTIONS (Do this FIRST, before generating any files)
+═══════════════════════════════════════════════════════════════════════════════
 
-## STEP 2: Analyze the Messages
-- Extract all unique usernames from the messages
-- Identify any usernames I didn't provide display names for
-- Ask me about any missing information
+## STEP 1: Review the Messages
+Read through ALL the messages and identify:
+- What is this channel about? (product updates, team chat, announcements, etc.)
+- What are the main topics/themes discussed?
+- What's the overall tone? (formal, casual, celebratory, technical)
+- Are there any major events or milestones mentioned?
 
-## STEP 3: Generate config.json
+## STEP 2: Extract Data Points
+From the messages, extract:
+- All unique usernames
+- Date range (first and last message dates)
+- Any team mentions or organizational hints
+- Recurring topics or keywords
+- Notable messages or achievements
+
+## STEP 3: ASK CLARIFICATION QUESTIONS
+Before generating any output, ASK ME about:
+
+1. **Missing Usernames**: 
+   "I found these usernames: [list]. Which ones need display name mappings?"
+   
+2. **Team Structure**: 
+   "Based on the messages, it seems like [observations]. How are people organized into teams?"
+   
+3. **Channel Context**:
+   "The channel appears to be about [topic]. Is this accurate? Any additional context?"
+   
+4. **Special Considerations**:
+   "I noticed [observation]. Should I handle this in any special way?"
+   
+5. **Preferences**:
+   "Do you want to include gentle roasts? How many top contributors to highlight?"
+
+WAIT FOR MY ANSWERS before proceeding to Phase 2!
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: GENERATE OUTPUT (Only after I answer your questions)
+═══════════════════════════════════════════════════════════════════════════════
+
+## STEP 4: Generate config.json
 Create a config file in this EXACT format:
 
 ```json
 {
   "channel": {
     "name": "channel-name",
-    "description": "Brief description of the channel purpose",
+    "description": "Brief description based on message content analysis",
     "year": 2025
   },
   "teams": [
@@ -101,22 +132,40 @@ Create a config file in this EXACT format:
   "preferences": {
     "includeRoasts": true,
     "topContributorsCount": 5
+  },
+  "context": {
+    "channelPurpose": "What this channel is used for",
+    "majorThemes": ["theme1", "theme2"],
+    "keyMilestones": ["milestone1", "milestone2"],
+    "tone": "casual/formal/celebratory"
   }
 }
 ```
 
-## STEP 4: Clean the Messages
+## STEP 5: Clean the Messages
 Convert my raw messages into a consistent format:
 - Use ISO timestamp: `2025-03-15T14:23:00Z username: Message`
 - Remove system messages (joins, leaves, channel topic changes)
 - Keep the original message content intact
 - Remove any blank lines
 
-## OUTPUT FORMAT
-Please provide:
-1. **config.json** - The complete configuration file
+## STEP 6: Generate Content Summary
+Create a summary of the channel content:
+- Main topics discussed
+- Key achievements or milestones
+- Notable quotes or messages
+- Suggested "highlights" for the video
+
+## OUTPUT FORMAT (Phase 2)
+After I answer your questions, provide:
+1. **config.json** - The complete configuration file with context
 2. **messages.txt** - The cleaned messages file
-3. **Summary** - A brief summary of what you found (contributor count, date range, etc.)
+3. **content-summary.md** - Summary of themes, milestones, and highlights
+4. **Data Summary** - Stats (contributor count, date range, message count)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Remember: START with Phase 1 questions! Don't skip to generating files.
 
 ---
 

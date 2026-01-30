@@ -39,5 +39,12 @@
   "preferences": {
     "includeRoasts": true,
     "topContributorsCount": 5
+  },
+  "context": {
+    "channelPurpose": "Weekly product shipping updates and feature announcements",
+    "majorThemes": ["feature releases", "infrastructure improvements", "team milestones", "AI integration"],
+    "keyMilestones": ["Hit 1M users in May", "Launched AI features in Q4", "10x infrastructure scaling"],
+    "tone": "celebratory",
+    "highlights": ["What an incredible year team! 200+ PRs shipped", "Q2 was absolutely ON FIRE"]
   }
 }
