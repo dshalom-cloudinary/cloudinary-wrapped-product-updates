@@ -419,8 +419,123 @@ CRITICAL RULES:
 OUTPUT: Valid JSON only. No markdown, no explanation."""
 
 
+# Few-shot example for synthesis
+SYNTHESIS_EXAMPLE_CONTENT = """
+═══ Q1 2025 (25 messages) ═══
+
+TOPICS:
+  • Infrastructure Updates (high): "Just deployed the new authentication module"
+  • Feature Launches (medium): "PR merged for the user dashboard redesign"
+
+ACHIEVEMENTS:
+  • Deployed authentication module (bob.jones, January 2025)
+  • Completed API refactoring - 500 lines cleaned up (alice.smith, January 2025)
+  • Database migration completed (carol.white, January 2025)
+
+SENTIMENT: excited (trend: improving)
+  Moods: high energy, celebration, momentum
+
+NOTABLE QUOTES:
+  • "Starting Q1 with fresh energy 🚀" - david.shalom (Sets the tone for the year)
+  • "500 lines cleaned up!" - alice.smith (Impressive refactoring)
+
+PATTERNS:
+  • Shipped! Celebrations: Team lead celebrates each completion with 'Shipped!'
+
+═══ Q2 2025 (15 messages) ═══
+
+TOPICS:
+  • Performance Optimization (high): "40% faster load times achieved"
+  • User Feedback (medium): "Users love the new dashboard"
+
+ACHIEVEMENTS:
+  • Hit 1M users milestone (team, May 2025)
+  • Released API v3 with GraphQL support (bob.jones, May 2025)
+
+SENTIMENT: celebratory (trend: stable)
+  Moods: pride, celebration
+"""
+
+# Note: Curly braces are escaped for string formatting compatibility
+SYNTHESIS_EXAMPLE_OUTPUT = """{{
+  "yearStory": {{
+    "opening": "2025 began with a burst of energy - 'Starting Q1 with fresh energy 🚀' set the tone as the team shipped auth, dashboards, and major refactoring",
+    "arc": "The team built momentum through infrastructure wins, culminating in a 1M user milestone that proved the work was paying off",
+    "climax": "Hitting 1 million users in Q2 was THE moment - proof that all those 'Shipped!' celebrations were building toward something big",
+    "closing": "With GraphQL, performance optimizations, and a clean codebase, the team ended ready for whatever 2026 brings"
+  }},
+  "topicHighlights": [
+    {{
+      "topic": "Infrastructure Updates",
+      "insight": "Dominated Q1 discussions with auth module and 500-line refactoring",
+      "bestQuote": "Just deployed the new authentication module",
+      "period": "Q1 2025"
+    }},
+    {{
+      "topic": "Performance Optimization",
+      "insight": "Q2 focus shifted to speed - achieved 40% faster load times",
+      "bestQuote": "40% faster load times achieved",
+      "period": "Q2 2025"
+    }}
+  ],
+  "bestQuotes": [
+    {{
+      "text": "Starting Q1 with fresh energy 🚀",
+      "author": "david.shalom",
+      "context": "This opening message set the tone for a year of shipping",
+      "period": "Q1 2025"
+    }},
+    {{
+      "text": "500 lines cleaned up!",
+      "author": "alice.smith",
+      "context": "Proof that technical debt doesn't stand a chance with this team",
+      "period": "Q1 2025"
+    }}
+  ],
+  "personalityTypes": [
+    {{
+      "username": "david.shalom",
+      "personalityType": "The Hype Master",
+      "evidence": "Started the year with '🚀' energy and said 'Shipped!' after every launch",
+      "funFact": "If motivation was caffeine, David would be a triple espresso"
+    }},
+    {{
+      "username": "alice.smith",
+      "personalityType": "The Refactorer",
+      "evidence": "Single-handedly cleaned up 500 lines of code",
+      "funFact": "Sees technical debt and says 'not on my watch'"
+    }},
+    {{
+      "username": "bob.jones",
+      "personalityType": "The Auth Guardian",
+      "evidence": "Deployed auth module AND released API v3 with GraphQL",
+      "funFact": "Security AND APIs - the full-stack security specialist"
+    }}
+  ],
+  "statsHighlights": [
+    "40 messages across 2 quarters - quality over quantity",
+    "1M users reached in Q2 - exponential growth year",
+    "500 lines of technical debt eliminated in one refactor"
+  ],
+  "roasts": [
+    "David said 'Shipped!' so many times we're considering renaming the channel to #david-ships-things",
+    "Alice cleaned up 500 lines. The remaining 5000 are 'scheduled for Q3'",
+    "Bob deployed auth AND GraphQL. He's either a genius or has something to prove."
+  ]
+}}"""
+
 # Prompt template for synthesis
 SYNTHESIS_PROMPT_TEMPLATE = """Create a compelling "Wrapped" narrative for #{channel_name} in {year}.
+
+═══════════════════════════════════════════════════════════════════════════════
+                                   EXAMPLE
+═══════════════════════════════════════════════════════════════════════════════
+
+**Example Content Summaries:**
+""" + SYNTHESIS_EXAMPLE_CONTENT + """
+
+**Example Output:**
+""" + SYNTHESIS_EXAMPLE_OUTPUT + """
 
 ═══════════════════════════════════════════════════════════════════════════════
                             CONTENT ANALYSIS (Pass 1 Results)

@@ -552,8 +552,102 @@ OUTPUT: Valid JSON only. No markdown code blocks, no explanation text.
 If unsure about privacy, err on the side of exclusion."""
 
 
+# Few-shot example for content extraction
+CONTENT_EXTRACTION_EXAMPLE_INPUT = """[2025-01-15 09:30] david.shalom: Good morning team! Starting Q1 with fresh energy 🚀
+[2025-01-15 10:15] bob.jones: Just deployed the new authentication module
+[2025-01-15 10:17] david.shalom: Great work Bob! That was a big rock 💪
+[2025-01-15 14:23] carol.white: PR merged for the user dashboard redesign
+[2025-01-16 11:00] alice.smith: Finished the API refactoring, 500 lines cleaned up!
+[2025-01-16 11:05] david.shalom: Shipped! Thanks Alice, great cleanup
+[2025-01-20 09:00] bob.jones: Starting work on the caching layer today
+[2025-01-25 16:30] carol.white: Database migration complete 🎉"""
+
+# Note: Curly braces are escaped for string formatting compatibility
+CONTENT_EXTRACTION_EXAMPLE_OUTPUT = """{{
+  "period": "Q1 2025",
+  "topics": [
+    {{
+      "name": "Infrastructure & Security",
+      "frequency": "high",
+      "sample_quote": "Just deployed the new authentication module"
+    }},
+    {{
+      "name": "Code Quality & Refactoring",
+      "frequency": "medium",
+      "sample_quote": "Finished the API refactoring, 500 lines cleaned up!"
+    }},
+    {{
+      "name": "UI/UX Improvements",
+      "frequency": "low",
+      "sample_quote": "PR merged for the user dashboard redesign"
+    }}
+  ],
+  "achievements": [
+    {{
+      "description": "Deployed new authentication module",
+      "who": "bob.jones",
+      "date": "January 15, 2025"
+    }},
+    {{
+      "description": "Completed API refactoring (500 lines cleaned up)",
+      "who": "alice.smith",
+      "date": "January 16, 2025"
+    }},
+    {{
+      "description": "Database migration completed",
+      "who": "carol.white",
+      "date": "January 25, 2025"
+    }}
+  ],
+  "sentiment": {{
+    "overall": "excited",
+    "trend": "improving",
+    "notable_moods": ["high energy", "celebration", "momentum"]
+  }},
+  "notable_quotes": [
+    {{
+      "text": "Starting Q1 with fresh energy 🚀",
+      "author": "david.shalom",
+      "why_notable": "Sets the energetic tone for the quarter"
+    }},
+    {{
+      "text": "500 lines cleaned up!",
+      "author": "alice.smith",
+      "why_notable": "Impressive refactoring accomplishment"
+    }},
+    {{
+      "text": "Database migration complete 🎉",
+      "author": "carol.white",
+      "why_notable": "Major infrastructure milestone"
+    }}
+  ],
+  "recurring_patterns": [
+    {{
+      "name": "Shipped! Celebrations",
+      "description": "Team lead celebrates each completion with 'Shipped!'",
+      "frequency": "after each feature completion"
+    }},
+    {{
+      "name": "Emoji Usage for Milestones",
+      "description": "Team uses 🚀 🎉 💪 to celebrate wins",
+      "frequency": "with every major announcement"
+    }}
+  ]
+}}"""
+
+
 # Prompt template for content extraction
 CONTENT_EXTRACTION_PROMPT_TEMPLATE = """Analyze these Slack messages from {period} and extract semantic content for a year-end video.
+
+═══════════════════════════════════════════════════════════════════════════════
+                                    EXAMPLE
+═══════════════════════════════════════════════════════════════════════════════
+
+**Example Messages:**
+""" + CONTENT_EXTRACTION_EXAMPLE_INPUT + """
+
+**Example Output:**
+""" + CONTENT_EXTRACTION_EXAMPLE_OUTPUT + """
 
 ═══════════════════════════════════════════════════════════════════════════════
                               MESSAGES TO ANALYZE

@@ -390,6 +390,206 @@ def generate(
     console.print("[yellow]→[/yellow] Video data generation (Epic 5 pending)")
 
 
+# ============================================================================
+# DIRECT COMMAND - LLM-Direct analysis (bypasses parser)
+# ============================================================================
+
+@app.command()
+def direct(
+    data: str = typer.Option(
+        ...,
+        "--data",
+        "-d",
+        help="Path to raw Slack messages text file (any format).",
+    ),
+    channel: str = typer.Option(
+        ...,
+        "--channel",
+        "-n",
+        help="Name of the Slack channel.",
+    ),
+    year: int = typer.Option(
+        2025,
+        "--year",
+        "-y",
+        help="Year to analyze.",
+    ),
+    output: str = typer.Option(
+        "output",
+        "--output",
+        "-o",
+        help="Directory to save output files.",
+    ),
+    context: Optional[str] = typer.Option(
+        None,
+        "--context",
+        help="Additional context about the channel/team (free-form text).",
+    ),
+    team_info: Optional[str] = typer.Option(
+        None,
+        "--team-info",
+        "-t",
+        help="Team information (e.g., 'Backend: David, Bob; Frontend: Alice, Carol').",
+    ),
+    openai_key: Optional[str] = typer.Option(
+        None,
+        "--openai-key",
+        envvar="OPENAI_API_KEY",
+        help="OpenAI API key.",
+    ),
+    openai_model: str = typer.Option(
+        "gpt-5.2-thinking",
+        "--model",
+        "-m",
+        help="OpenAI model to use.",
+    ),
+    include_roasts: bool = typer.Option(
+        True,
+        "--roasts/--no-roasts",
+        help="Include playful roasts in output.",
+    ),
+    top_contributors: int = typer.Option(
+        5,
+        "--top",
+        help="Number of top contributors to highlight.",
+    ),
+):
+    """
+    Generate Wrapped video using LLM-direct analysis.
+    
+    Bypasses regex-based parsing entirely and uses GPT to directly
+    analyze raw Slack messages. Works with ANY Slack message format.
+    
+    This mode is ideal when:
+    - Your Slack export format is not recognized by the parser
+    - You have copy-pasted messages from Slack
+    - You want the LLM to understand the content directly
+    
+    Example:
+        python -m slack_wrapped direct --data messages.txt --channel product-updates --year 2025
+    """
+    import json
+    from .llm_client import create_llm_client, LLMError
+    from .llm_direct_analyzer import LLMDirectAnalyzer, UserContext
+    
+    console.print(f"\n[bold cyan]Slack Wrapped[/bold cyan] - LLM-Direct Mode\n")
+    
+    # Validate data file
+    data_path = Path(data)
+    if not data_path.exists():
+        console.print(f"[red]Error:[/red] Data file not found: {data}")
+        raise typer.Exit(1)
+    
+    # Check for API key
+    if not openai_key:
+        console.print("[red]Error:[/red] OpenAI API key required for LLM-direct mode.")
+        console.print("Set OPENAI_API_KEY environment variable or use --openai-key option.")
+        raise typer.Exit(1)
+    
+    # Read raw text
+    console.print(f"[cyan]Reading raw messages...[/cyan]")
+    try:
+        raw_text = data_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raw_text = data_path.read_text(encoding="latin-1")
+    
+    console.print(f"[green]✓[/green] Read {len(raw_text):,} characters from {data_path.name}")
+    
+    # Create user context
+    user_context = UserContext(
+        channel_name=channel,
+        year=year,
+        channel_description=context or "",
+        team_info=team_info or "",
+        include_roasts=include_roasts,
+        top_contributors_count=top_contributors,
+    )
+    
+    console.print(f"\n[bold]Channel:[/bold] {channel}")
+    console.print(f"[bold]Year:[/bold] {year}")
+    if context:
+        console.print(f"[bold]Context:[/bold] {context[:100]}...")
+    if team_info:
+        console.print(f"[bold]Teams:[/bold] {team_info[:100]}...")
+    console.print(f"[bold]Model:[/bold] {openai_model}")
+    console.print()
+    
+    # Create LLM client
+    try:
+        llm = create_llm_client(model=openai_model, api_key=openai_key)
+    except Exception as e:
+        console.print(f"[red]Error creating LLM client:[/red] {e}")
+        raise typer.Exit(1)
+    
+    # Run direct analysis
+    console.print("[cyan]Analyzing messages with AI...[/cyan]")
+    console.print("[dim]This may take a minute for large files...[/dim]")
+    
+    try:
+        analyzer = LLMDirectAnalyzer(llm)
+        result = analyzer.analyze(raw_text, user_context)
+        console.print(f"[green]✓[/green] Analysis complete!")
+        
+        # Show summary
+        console.print(f"\n[bold]Analysis Summary:[/bold]")
+        console.print(f"  Contributors found: {len(result.contributors)}")
+        console.print(f"  Total messages: {result.total_messages}")
+        console.print(f"  Topics identified: {len(result.topics)}")
+        console.print(f"  Achievements found: {len(result.achievements)}")
+        console.print(f"  Notable quotes: {len(result.notable_quotes)}")
+        
+        # Convert to video data
+        console.print("\n[cyan]Generating video data...[/cyan]")
+        video_data = analyzer.to_video_data(result, user_context)
+        
+        # Save output
+        output_path = Path(output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        video_data_file = output_path / f"video-data-{channel}.json"
+        with open(video_data_file, "w") as f:
+            json.dump(video_data.to_dict(), f, indent=2)
+        
+        console.print(f"[green]✓[/green] Video data saved to: {video_data_file}")
+        
+        # Also save raw analysis for debugging
+        analysis_file = output_path / f"analysis-{channel}.json"
+        with open(analysis_file, "w") as f:
+            json.dump({
+                "contributors": result.contributors,
+                "totalMessages": result.total_messages,
+                "messagesByMonth": result.messages_by_month,
+                "messagesByQuarter": result.messages_by_quarter,
+                "topics": result.topics,
+                "achievements": result.achievements,
+                "notableQuotes": result.notable_quotes,
+                "personalities": result.personalities,
+                "insights": result.insights,
+                "roasts": result.roasts,
+                "yearStory": result.year_story,
+                "sentiment": result.sentiment,
+            }, f, indent=2)
+        
+        console.print(f"[green]✓[/green] Raw analysis saved to: {analysis_file}")
+        
+        # Show token usage
+        usage = llm.get_usage()
+        cost = llm.get_estimated_cost()
+        console.print(f"\n[dim]Token usage: {usage.total_tokens:,} ({usage.prompt_tokens:,} prompt, {usage.completion_tokens:,} completion)[/dim]")
+        console.print(f"[dim]Estimated cost: ${cost:.4f}[/dim]")
+        
+        console.print("\n[bold green]Done![/bold green]")
+        console.print(f"\nTo preview the video, run:")
+        console.print(f"  cd wrapped-video && npm run dev")
+        
+    except LLMError as e:
+        console.print(f"[red]Error during analysis:[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Unexpected error:[/red] {e}")
+        raise typer.Exit(1)
+
+
 @app.command()
 def validate(
     data: str = typer.Option(

@@ -65,10 +65,137 @@ RULES:
 - Keep roasts gentle - the kind you'd say to a friend
 """
 
+# Few-shot example for insights generation
+INSIGHTS_EXAMPLE_DATA = """CHANNEL TOTALS:
+  Messages: 47 | Words: 728 | Contributors: 4
+  Active Days: 42 | Avg Msg Length: 15.5 words
+  Peak: 10:00 on Wednesdays
+
+QUARTERLY BREAKDOWN:
+- Q1: 20 messages
+- Q2: 15 messages
+- Q3: 8 messages
+- Q4: 4 messages
+
+TEAM COMPARISON:
+- Backend: 28 messages, 2 members, 14.0 avg/person
+- Frontend: 19 messages, 2 members, 9.5 avg/person
+
+LEADERBOARD:
+🥇 David Shalom (david.shalom): 16 messages (34.0%), 248 words, avg 15.5 words/msg, team: Backend
+🥈 Alice Smith (alice.smith): 12 messages (25.5%), 186 words, avg 15.5 words/msg, team: Frontend
+🥉 Bob Jones (bob.jones): 12 messages (25.5%), 186 words, avg 15.5 words/msg, team: Backend
+#4 Carol White (carol.white): 7 messages (14.9%), 108 words, avg 15.4 words/msg, team: Frontend"""
+
+# Note: Curly braces are escaped for string formatting compatibility
+INSIGHTS_EXAMPLE_OUTPUT = """{{
+  "stats": [
+    {{
+      "label": "Messages Per Active Day",
+      "value": 1.12,
+      "unit": "messages/day",
+      "context": "About 1 message per working day - quality over quantity!"
+    }},
+    {{
+      "label": "Words Per Message",
+      "value": 15.5,
+      "unit": "words/msg",
+      "context": "Perfect tweet-length updates - concise and impactful"
+    }},
+    {{
+      "label": "Participation Rate",
+      "value": 100,
+      "unit": "%",
+      "context": "All 4 contributors actively participated"
+    }},
+    {{
+      "label": "Q1 Dominance",
+      "value": 42.6,
+      "unit": "% of total",
+      "context": "Q1 had 20 of 47 messages - the team peaked early"
+    }}
+  ],
+  "records": [
+    {{
+      "title": "Message Champion",
+      "winner": "David Shalom",
+      "value": 16,
+      "unit": "messages",
+      "comparison": "34% of total, 1.3x the runner-up",
+      "quip": "Carried the channel like Atlas carried the world 💪"
+    }},
+    {{
+      "title": "Most Active Quarter",
+      "winner": "Q1 2025",
+      "value": 20,
+      "unit": "messages",
+      "comparison": "42.6% of yearly total",
+      "quip": "New year energy was REAL"
+    }}
+  ],
+  "competitions": [
+    {{
+      "category": "Team Message Battle",
+      "participants": ["Backend", "Frontend"],
+      "scores": [28, 19],
+      "winner": "Backend",
+      "margin": "+9 messages (47% more)",
+      "quip": "Backend talked the talk. Frontend shipped in silence."
+    }}
+  ],
+  "superlatives": [
+    {{
+      "title": "The Announcer",
+      "winner": "david.shalom",
+      "value": 34.0,
+      "unit": "% contribution",
+      "percentile": "#1 of 4",
+      "quip": "Responsible for over a third of all updates"
+    }},
+    {{
+      "title": "The Consistent Duo",
+      "winner": "alice.smith & bob.jones",
+      "value": 12,
+      "unit": "messages each",
+      "percentile": "Tied for #2",
+      "quip": "Mirror-image contributors - 25.5% each, perfectly balanced"
+    }},
+    {{
+      "title": "The Rising Star",
+      "winner": "carol.white",
+      "value": 7,
+      "unit": "messages",
+      "percentile": "#4 of 4",
+      "quip": "Quality over quantity - every message counted"
+    }}
+  ],
+  "insights": [
+    "Q1 dominated with 20 messages (42.6%) - new year energy peaked early",
+    "Backend team outpaced Frontend 28 to 19 (+47%) in total messages",
+    "Peak hour 10:00 AM on Wednesdays - mid-week momentum was real",
+    "Activity declined each quarter: Q1→Q2→Q3→Q4 showed 80% drop from peak"
+  ],
+  "roasts": [
+    "With 1.1 messages per day, this channel mastered the art of strategic silence",
+    "Q4 had 4 messages. That's almost 1 per month. Holiday mode: ACTIVATED.",
+    "David wrote 34% of messages. The other 3 combined were his backup singers."
+  ]
+}}"""
+
 # Prompt template for generating insights
 INSIGHTS_PROMPT_TEMPLATE = """Create a DATA-DRIVEN "Wrapped" analysis. Every output MUST include specific numbers.
 
 CHANNEL: {channel_name} | YEAR: {year}
+
+══════════════════════════════════════════════════════════════════════
+                              EXAMPLE
+══════════════════════════════════════════════════════════════════════
+
+**Example Input Data:**
+""" + INSIGHTS_EXAMPLE_DATA + """
+
+**Example Output:**
+""" + INSIGHTS_EXAMPLE_OUTPUT + """
 
 ══════════════════════════════════════════════════════════════════════
                          CHANNEL CONTEXT

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 class FileExtractionError(Exception):

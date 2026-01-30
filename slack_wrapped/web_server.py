@@ -3,11 +3,13 @@
 Provides a web-based UI for the interactive setup wizard.
 """
 
+import base64
 import json
 import logging
 import os
 import sys
 import tempfile
+import uuid
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -22,6 +24,7 @@ from .config_generator import ConfigGenerator, generate_config
 from .parser import SlackParser, ParserError
 from .llm_client import LLMClient, create_llm_client, LLMError
 from .file_extractor import extract_text_from_file, FileExtractionError
+from .llm_direct_analyzer import LLMDirectAnalyzer, UserContext, analyze_raw_slack
 
 # Configure logging
 logging.basicConfig(
@@ -47,8 +50,13 @@ app = FastAPI(
 )
 
 # Store analysis results in memory (for single-user local use)
+# NOTE: These are not thread-safe. This is acceptable for local single-user use.
+# For production multi-user deployment, use a proper session store (Redis, database).
 _analysis_store: dict[str, AnalysisResult] = {}
 _messages_store: dict[str, str] = {}
+
+# Maximum number of sessions to keep (prevents unbounded memory growth)
+_MAX_SESSIONS = 100
 
 
 # Inline HTML template (no external files needed)
@@ -110,6 +118,18 @@ SETUP_HTML = """
                     placeholder="2025-01-15T09:30:00Z david.shalom: Good morning team!
 2025-01-15T09:32:00Z alice.smith: Morning David!
 ..."></textarea>
+            </div>
+            
+            <div class="mb-4 p-4 bg-gray-700 rounded">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="llm-direct-mode" class="rounded">
+                    <span class="font-medium">LLM-Direct Mode</span>
+                    <span class="text-cyan-400 text-sm">(Recommended)</span>
+                </label>
+                <p class="text-sm text-gray-400 mt-2">
+                    Bypasses regex parsing - works with ANY Slack format (copy-paste, exports, etc.)
+                    The AI analyzes your raw messages directly.
+                </p>
             </div>
             
             <div id="upload-error" class="text-red-400 text-sm mb-4 hidden"></div>
@@ -267,16 +287,24 @@ Tone preferences:
             <h2 class="text-2xl font-semibold mb-4 text-green-400">Setup Complete!</h2>
             <p class="text-gray-400 mb-6">Your configuration has been saved.</p>
             
-            <div class="bg-gray-700 rounded p-4 mb-6 text-left">
+            <div class="bg-gray-700 rounded p-4 mb-6 text-left space-y-2">
                 <p class="text-sm font-mono">Config saved to: <span id="config-path" class="text-cyan-400"></span></p>
+                <p id="video-data-info" class="text-sm font-mono hidden">Video data: <span id="video-data-path" class="text-green-400"></span></p>
             </div>
             
-            <div class="space-y-2">
+            <div id="next-steps-standard" class="space-y-2">
                 <p class="text-sm text-gray-400">Next steps:</p>
                 <code class="block bg-gray-700 rounded p-3 text-sm text-left">
 python -m slack_wrapped generate \\
   --data messages.txt \\
   --config <span id="config-filename">config.json</span>
+                </code>
+            </div>
+            
+            <div id="next-steps-direct" class="space-y-2 hidden">
+                <p class="text-sm text-gray-400">Video data is ready! To preview:</p>
+                <code class="block bg-gray-700 rounded p-3 text-sm text-left">
+cd wrapped-video && npm run dev
                 </code>
             </div>
         </div>
@@ -347,7 +375,10 @@ python -m slack_wrapped generate \\
             loading.classList.remove('hidden');
             
             try {
-                const response = await fetch('/api/analyze', {
+                const useLLMDirect = document.getElementById('llm-direct-mode').checked;
+                const endpoint = useLLMDirect ? '/api/analyze-direct' : '/api/analyze';
+                
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -390,8 +421,19 @@ python -m slack_wrapped generate \\
         function showAnalysisSummary(data) {
             const container = document.getElementById('analysis-summary');
             const ca = data.channel_analysis || {};
+            const isLLMDirect = data.llm_direct || false;
+            const directData = data.direct_analysis || {};
             
-            let html = `
+            let html = '';
+            
+            // Mode indicator
+            if (isLLMDirect) {
+                html += `<div class="bg-cyan-900 text-cyan-300 px-3 py-1 rounded-full text-sm inline-block mb-4">
+                    ✨ LLM-Direct Mode
+                </div>`;
+            }
+            
+            html += `
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div class="bg-gray-700 rounded p-3">
                         <div class="text-2xl font-bold text-cyan-400">${data.total_messages || 0}</div>
@@ -404,14 +446,35 @@ python -m slack_wrapped generate \\
                 </div>
             `;
             
-            if (ca.purpose) {
-                html += `<p class="mb-2"><strong>Purpose:</strong> ${ca.purpose}</p>`;
-            }
-            if (ca.tone) {
-                html += `<p class="mb-2"><strong>Tone:</strong> ${ca.tone}</p>`;
-            }
-            if (ca.main_topics && ca.main_topics.length > 0) {
-                html += `<p class="mb-2"><strong>Topics:</strong> ${ca.main_topics.join(', ')}</p>`;
+            // LLM-Direct specific info
+            if (isLLMDirect && directData) {
+                if (directData.topics && directData.topics.length > 0) {
+                    html += `<p class="mb-2"><strong>Topics Found:</strong> ${directData.topics.map(t => t.name || t).join(', ')}</p>`;
+                }
+                if (directData.achievements && directData.achievements.length > 0) {
+                    html += `<p class="mb-2"><strong>Achievements:</strong> ${directData.achievements.length} found</p>`;
+                }
+                if (directData.notable_quotes && directData.notable_quotes.length > 0) {
+                    html += `<p class="mb-2"><strong>Notable Quotes:</strong> ${directData.notable_quotes.length} extracted</p>`;
+                }
+                if (directData.insights && directData.insights.length > 0) {
+                    html += `<div class="mb-2"><strong>Sample Insights:</strong>
+                        <ul class="list-disc list-inside text-sm text-gray-400 mt-1">
+                            ${directData.insights.slice(0, 3).map(i => `<li>${i}</li>`).join('')}
+                        </ul>
+                    </div>`;
+                }
+            } else {
+                // Standard mode info
+                if (ca.purpose) {
+                    html += `<p class="mb-2"><strong>Purpose:</strong> ${ca.purpose}</p>`;
+                }
+                if (ca.tone) {
+                    html += `<p class="mb-2"><strong>Tone:</strong> ${ca.tone}</p>`;
+                }
+                if (ca.main_topics && ca.main_topics.length > 0) {
+                    html += `<p class="mb-2"><strong>Topics:</strong> ${ca.main_topics.join(', ')}</p>`;
+                }
             }
             
             container.innerHTML = html;
@@ -564,6 +627,14 @@ Special notes for the AI:
                 document.getElementById('config-path').textContent = data.path;
                 document.getElementById('config-filename').textContent = data.filename;
                 
+                // Handle video data path if present (LLM-direct mode)
+                if (data.video_data_path) {
+                    document.getElementById('video-data-info').classList.remove('hidden');
+                    document.getElementById('video-data-path').textContent = data.video_data_path;
+                    document.getElementById('next-steps-standard').classList.add('hidden');
+                    document.getElementById('next-steps-direct').classList.remove('hidden');
+                }
+                
                 document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
                 document.getElementById('step-success').classList.add('active');
                 document.getElementById('progress-bar').style.width = '100%';
@@ -605,7 +676,6 @@ async def analyze_messages(request: Request):
         
         # Handle file upload (PDF or other binary)
         if file_data and filename:
-            import base64
             logger.info(f"Processing file upload: {filename}")
             try:
                 file_bytes = base64.b64decode(file_data)
@@ -659,8 +729,15 @@ async def analyze_messages(request: Request):
             return _basic_analysis(messages)
         
         # Generate session ID and store result
-        import uuid
         session_id = str(uuid.uuid4())
+        
+        # Clean up old sessions if we have too many (FIFO eviction)
+        if len(_analysis_store) >= _MAX_SESSIONS:
+            oldest_key = next(iter(_analysis_store))
+            del _analysis_store[oldest_key]
+            if oldest_key in _messages_store:
+                del _messages_store[oldest_key]
+        
         _analysis_store[session_id] = result
         _messages_store[session_id] = messages_text
         
@@ -711,6 +788,146 @@ async def analyze_messages(request: Request):
         raise
     except Exception as e:
         logger.exception("Analysis failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze-direct")
+async def analyze_messages_direct(request: Request):
+    """
+    Analyze messages using LLM-direct mode (bypasses regex parsing).
+    
+    Expects JSON body with:
+    - messages: string of raw Slack messages (for text files)
+    - file_data: base64 encoded file content (for PDF files)
+    - filename: original filename (for format detection)
+    """
+    try:
+        data = await request.json()
+        messages_text = data.get("messages", "")
+        file_data = data.get("file_data")
+        filename = data.get("filename", "")
+        
+        logger.info(f"LLM-Direct analyze request: filename={filename}, has_file_data={bool(file_data)}")
+        
+        # Handle file upload (PDF or other binary)
+        if file_data and filename:
+            logger.info(f"Processing file upload: {filename}")
+            try:
+                file_bytes = base64.b64decode(file_data)
+                messages_text = extract_text_from_file(
+                    file_content=file_bytes,
+                    filename=filename,
+                )
+                logger.info(f"Extracted text: {len(messages_text)} characters")
+            except FileExtractionError as e:
+                logger.error(f"File extraction error: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
+        
+        if not messages_text:
+            raise HTTPException(status_code=400, detail="No messages provided")
+        
+        # Check for OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=400, 
+                detail="OpenAI API key required for LLM-direct mode. Set OPENAI_API_KEY environment variable."
+            )
+        
+        # Create LLM client
+        try:
+            llm = create_llm_client(api_key=api_key)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create LLM client: {e}")
+        
+        # Create user context with defaults (will be refined in step 3)
+        context = UserContext(
+            channel_name="channel",  # Will be set by user in step 3
+            year=2025,
+            channel_description="",
+            team_info="",
+            include_roasts=True,
+            top_contributors_count=5,
+        )
+        
+        # Run LLM-direct analysis
+        logger.info("Starting LLM-direct analysis...")
+        try:
+            analyzer = LLMDirectAnalyzer(llm)
+            result = analyzer.analyze(messages_text, context)
+            logger.info(f"LLM-direct analysis complete: {len(result.contributors)} contributors found")
+        except Exception as e:
+            logger.exception("LLM-direct analysis failed")
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+        
+        # Generate session ID and store result
+        session_id = str(uuid.uuid4())
+        
+        # Clean up old sessions if we have too many
+        if len(_analysis_store) >= _MAX_SESSIONS:
+            oldest_key = next(iter(_analysis_store))
+            del _analysis_store[oldest_key]
+            if oldest_key in _messages_store:
+                del _messages_store[oldest_key]
+        
+        # Store the raw result for later use
+        _messages_store[session_id] = messages_text
+        
+        # Also store a marker that this was LLM-direct mode
+        _analysis_store[session_id] = {"llm_direct": True, "result": result}
+        
+        # Convert to format compatible with existing UI
+        return {
+            "session_id": session_id,
+            "llm_direct": True,
+            "total_messages": result.total_messages,
+            "date_range": {
+                "start": None,
+                "end": None,
+            },
+            "year": context.year,
+            "usernames": [c.get("username", "") for c in result.contributors],
+            "message_counts": {
+                c.get("username", ""): c.get("messageCount", 0)
+                for c in result.contributors
+            },
+            "channel_analysis": {
+                "likely_name": "",
+                "purpose": "",
+                "tone": result.sentiment,
+                "main_topics": [t.get("name", "") for t in result.topics[:5]],
+                "key_milestones": [a.get("title", "") for a in result.achievements[:5]],
+                "notable_patterns": [],
+            },
+            "team_suggestions": [],
+            "user_suggestions": [
+                {
+                    "username": c.get("username", ""),
+                    "suggested_name": c.get("displayName", c.get("username", "")),
+                    "suggested_display_name": c.get("displayName", ""),
+                    "message_count": c.get("messageCount", 0),
+                    "confidence": "high",
+                }
+                for c in result.contributors
+            ],
+            "highlights": [],
+            # LLM-direct specific data
+            "direct_analysis": {
+                "contributors": result.contributors,
+                "topics": result.topics,
+                "achievements": result.achievements,
+                "notable_quotes": result.notable_quotes,
+                "personalities": result.personalities,
+                "insights": result.insights,
+                "roasts": result.roasts,
+                "year_story": result.year_story,
+            },
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("LLM-direct analysis failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -805,10 +1022,41 @@ async def save_config_endpoint(request: Request):
             with open(messages_path, "w") as f:
                 f.write(_messages_store[session_id])
         
+        # Check if this was an LLM-direct session and generate video data
+        video_data_path = None
+        if session_id and session_id in _analysis_store:
+            stored = _analysis_store[session_id]
+            if isinstance(stored, dict) and stored.get("llm_direct"):
+                # Generate video data from LLM-direct result
+                try:
+                    result = stored["result"]
+                    context = UserContext(
+                        channel_name=channel_name,
+                        year=config["channel"]["year"],
+                        channel_description=config.get("channel", {}).get("description", ""),
+                        team_info=config.get("context", {}).get("userProvidedContext", ""),
+                        include_roasts=config.get("preferences", {}).get("includeRoasts", True),
+                        top_contributors_count=config.get("preferences", {}).get("topContributorsCount", 5),
+                    )
+                    
+                    analyzer = LLMDirectAnalyzer(create_llm_client())
+                    video_data = analyzer.to_video_data(result, context)
+                    
+                    video_data_filename = f"video-data-{channel_name}.json"
+                    video_data_path = output_dir / video_data_filename
+                    
+                    with open(video_data_path, "w") as f:
+                        json.dump(video_data.to_dict(), f, indent=2)
+                    
+                    logger.info(f"Video data saved to: {video_data_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate video data: {e}")
+        
         return {
             "success": True,
             "path": str(output_path.absolute()),
             "filename": filename,
+            "video_data_path": str(video_data_path.absolute()) if video_data_path else None,
         }
         
     except HTTPException:

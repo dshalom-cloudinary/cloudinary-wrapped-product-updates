@@ -454,7 +454,7 @@ class MessageAnalyzer:
         
         # Year (required)
         if "year" not in question_ids:
-            year = basic_stats["date_range"][0].year if basic_stats["date_range"][0] else 2025
+            year = basic_stats["date_range"][0].year if basic_stats["date_range"][0] else datetime.now().year
             questions.insert(1, Question(
                 id="year",
                 question="What year is this Wrapped for?",

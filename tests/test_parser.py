@@ -242,6 +242,130 @@ invalid line here"""
         assert messages[0].username == "david_shalom"
 
 
+class TestSlackParserJsonFieldDetection:
+    """Tests for JSON/structured data field detection."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.parser = SlackParser(default_year=2025)
+    
+    def test_skip_camelcase_field_names(self):
+        """Test that camelCase field names are skipped (not treated as usernames)."""
+        raw = """publicId: some-video-id
+cloudName: my-cloud
+2025-03-15T14:23:00Z david.shalom: This is a real message"""
+        
+        messages = self.parser.parse(raw)
+        
+        # Only the real message should be parsed
+        assert len(messages) == 1
+        assert messages[0].username == "david.shalom"
+        
+        # Check that JSON fields were tracked
+        stats = self.parser.get_stats()
+        assert stats["skipped_json_fields"] == 2
+    
+    def test_skip_known_field_names(self):
+        """Test that known field names (Assignee, Priority, etc.) are skipped."""
+        raw = """Assignee: John Doe
+Priority: High
+Status: In Progress
+2025-03-15T14:23:00Z david.shalom: Real Slack message here"""
+        
+        messages = self.parser.parse(raw)
+        
+        assert len(messages) == 1
+        assert messages[0].username == "david.shalom"
+        
+        stats = self.parser.get_stats()
+        assert stats["skipped_json_fields"] >= 2
+    
+    def test_cloudinary_field_names_skipped(self):
+        """Test that Cloudinary-specific field names are not treated as users."""
+        raw = """secureDistribution: example.cloudinary.com
+adaptiveStreaming: true
+videoSources: mp4,webm
+2025-03-15T14:23:00Z david.shalom: Shipped the video feature"""
+        
+        messages = self.parser.parse(raw)
+        
+        assert len(messages) == 1
+        assert messages[0].username == "david.shalom"
+    
+    def test_json_input_detected(self):
+        """Test that pure JSON input raises a helpful error."""
+        raw = """{
+  "publicId": "video123",
+  "cloudName": "my-cloud",
+  "resourceType": "video"
+}"""
+        
+        with pytest.raises(ParserError) as excinfo:
+            self.parser.parse(raw)
+        
+        assert "JSON data" in str(excinfo.value)
+    
+    def test_json_array_detected(self):
+        """Test that JSON array input raises an error."""
+        raw = """[
+  {"username": "david", "message": "hello"},
+  {"username": "alice", "message": "hi"}
+]"""
+        
+        with pytest.raises(ParserError) as excinfo:
+            self.parser.parse(raw)
+        
+        assert "JSON" in str(excinfo.value)
+    
+    def test_real_usernames_not_filtered(self):
+        """Test that real usernames are NOT incorrectly filtered."""
+        raw = """2025-03-15T14:23:00Z david.shalom: First message
+2025-03-15T14:24:00Z alice.smith: Second message
+2025-03-15T14:25:00Z bob.jones: Third message
+2025-03-15T14:26:00Z carol.white: Fourth message"""
+        
+        messages = self.parser.parse(raw)
+        
+        assert len(messages) == 4
+        usernames = [m.username for m in messages]
+        assert "david.shalom" in usernames
+        assert "alice.smith" in usernames
+        assert "bob.jones" in usernames
+        assert "carol.white" in usernames
+    
+    def test_name_colon_format_not_filtered(self):
+        """Test that 'Name Colon: message' format works for real names."""
+        raw = """David Shalom: Hello everyone!
+Alice Smith: Hi David!
+Bob Jones: Great to see you all"""
+        
+        messages = self.parser.parse(raw)
+        
+        assert len(messages) == 3
+        # Names should be converted to username format
+        usernames = [m.username for m in messages]
+        assert "david.shalom" in usernames
+        assert "alice.smith" in usernames
+        assert "bob.jones" in usernames
+    
+    def test_many_json_fields_warning(self):
+        """Test that many JSON-like fields produces a warning in error message."""
+        raw = """publicId: id1
+cloudName: name1
+resourceType: type1
+secureUrl: url1
+format: fmt1
+width: 100
+height: 200"""
+        
+        with pytest.raises(ParserError) as excinfo:
+            self.parser.parse(raw)
+        
+        # Should mention structured data
+        error_msg = str(excinfo.value)
+        assert "JSON" in error_msg or "structured data" in error_msg
+
+
 class TestSlackParserFile:
     """Tests for file parsing functionality."""
     

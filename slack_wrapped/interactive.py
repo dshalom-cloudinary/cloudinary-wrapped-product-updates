@@ -333,9 +333,10 @@ def _edit_channel_info(config: dict) -> dict:
         "Channel name",
         default=channel.get("name", ""),
     )
+    from datetime import datetime
     channel["year"] = int(Prompt.ask(
         "Year",
-        default=str(channel.get("year", 2025)),
+        default=str(channel.get("year", datetime.now().year)),
     ))
     channel["description"] = Prompt.ask(
         "Description",

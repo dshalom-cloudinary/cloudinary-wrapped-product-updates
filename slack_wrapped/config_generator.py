@@ -119,12 +119,15 @@ class ConfigGenerator:
         """Build channel context configuration."""
         ca = self.analysis.channel_analysis
         
+        # Safely get highlights (handle None or empty list)
+        highlights = self.analysis.highlights or []
+        
         return {
             "channelPurpose": ca.purpose or self.answers.get("channel_description", ""),
-            "majorThemes": ca.main_topics,
-            "keyMilestones": ca.key_milestones,
-            "tone": ca.tone,
-            "highlights": [h.description for h in self.analysis.highlights[:5]],
+            "majorThemes": ca.main_topics or [],
+            "keyMilestones": ca.key_milestones or [],
+            "tone": ca.tone or "",
+            "highlights": [h.description for h in highlights[:5]],
         }
     
     def save(self, output_path: str) -> Path:
@@ -201,12 +204,13 @@ def merge_analysis_with_config(analysis: AnalysisResult, existing_config: dict) 
     # Add/enhance context if not present
     if "context" not in config or not config["context"]:
         ca = analysis.channel_analysis
+        highlights = analysis.highlights or []
         config["context"] = {
-            "channelPurpose": ca.purpose,
-            "majorThemes": ca.main_topics,
-            "keyMilestones": ca.key_milestones,
-            "tone": ca.tone,
-            "highlights": [h.description for h in analysis.highlights[:5]],
+            "channelPurpose": ca.purpose or "",
+            "majorThemes": ca.main_topics or [],
+            "keyMilestones": ca.key_milestones or [],
+            "tone": ca.tone or "",
+            "highlights": [h.description for h in highlights[:5]],
         }
     else:
         # Merge with existing context
@@ -221,7 +225,8 @@ def merge_analysis_with_config(analysis: AnalysisResult, existing_config: dict) 
             ctx["keyMilestones"] = ca.key_milestones
         if not ctx.get("tone") and ca.tone:
             ctx["tone"] = ca.tone
-        if not ctx.get("highlights") and analysis.highlights:
-            ctx["highlights"] = [h.description for h in analysis.highlights[:5]]
+        highlights = analysis.highlights or []
+        if not ctx.get("highlights") and highlights:
+            ctx["highlights"] = [h.description for h in highlights[:5]]
     
     return config
