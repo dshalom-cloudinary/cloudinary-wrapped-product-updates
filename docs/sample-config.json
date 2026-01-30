@@ -1,0 +1,43 @@
+{
+  "channel": {
+    "name": "product-updates",
+    "description": "Product announcements and updates",
+    "year": 2025
+  },
+  "teams": [
+    {
+      "name": "Backend",
+      "members": ["david.shalom", "alice.smith"]
+    },
+    {
+      "name": "Frontend",
+      "members": ["bob.jones", "carol.white"]
+    }
+  ],
+  "userMappings": [
+    {
+      "slackUsername": "david.shalom",
+      "displayName": "David Shalom",
+      "team": "Backend"
+    },
+    {
+      "slackUsername": "alice.smith",
+      "displayName": "Alice Smith",
+      "team": "Backend"
+    },
+    {
+      "slackUsername": "bob.jones",
+      "displayName": "Bob Jones",
+      "team": "Frontend"
+    },
+    {
+      "slackUsername": "carol.white",
+      "displayName": "Carol White",
+      "team": "Frontend"
+    }
+  ],
+  "preferences": {
+    "includeRoasts": true,
+    "topContributorsCount": 5
+  }
+}
