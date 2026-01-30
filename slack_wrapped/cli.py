@@ -240,7 +240,7 @@ def generate(
         help="OpenAI API key for AI-powered insights.",
     ),
     openai_model: str = typer.Option(
-        "gpt-5.2",
+        "gpt-5.2-thinking",
         "--model",
         "-m",
         help="OpenAI model to use for insights generation.",
@@ -256,9 +256,9 @@ def generate(
         help="Skip two-pass content analysis (faster, less semantic insight).",
     ),
     content_model: str = typer.Option(
-        "o3-mini",
+        "gpt-5.2-thinking",
         "--content-model",
-        help="Model for content analysis pass (default: o3-mini/GPT-5.2 Thinking).",
+        help="Model for content analysis pass.",
     ),
     interactive: bool = typer.Option(
         False,

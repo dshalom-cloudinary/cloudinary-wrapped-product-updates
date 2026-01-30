@@ -258,7 +258,7 @@ class TestContentAnalyzer:
         """Test initialization with default model."""
         analyzer = ContentAnalyzer(mock_llm_client)
         
-        assert analyzer.model == "o3-mini"
+        assert analyzer.model == "gpt-5.2-thinking"
         assert analyzer.llm == mock_llm_client
     
     def test_init_custom_model(self, mock_llm_client):

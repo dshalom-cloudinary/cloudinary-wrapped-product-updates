@@ -32,8 +32,8 @@ class LLMUsage:
 class LLMClient:
     """OpenAI API client with retry logic and fallback."""
     
-    DEFAULT_MODEL = "gpt-5.2"
-    DEV_MODEL = "gpt-5-mini"
+    DEFAULT_MODEL = "gpt-5.2-thinking"
+    DEV_MODEL = "gpt-5.2-thinking"  # Use thinking model for all operations
     
     def __init__(
         self,

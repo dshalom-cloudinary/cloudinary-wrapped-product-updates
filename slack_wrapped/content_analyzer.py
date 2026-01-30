@@ -1,6 +1,6 @@
 """Content Analyzer for Slack Wrapped.
 
-Implements two-pass content analysis using GPT-5.2 Thinking (o3-mini) for 
+Implements two-pass content analysis using GPT-5.2 Thinking for 
 semantic understanding of message content.
 
 Pass 1: Extracts topics, achievements, sentiment, notable quotes, patterns
@@ -139,10 +139,10 @@ class MessageChunk:
 
 
 class ContentAnalyzer:
-    """Analyzes message content for semantic meaning using GPT-5.2 Thinking (o3-mini)."""
+    """Analyzes message content for semantic meaning using GPT-5.2 Thinking."""
     
-    # Default model for content analysis (o3-mini is GPT-5.2 Thinking)
-    DEFAULT_MODEL = "o3-mini"
+    # Default model for content analysis
+    DEFAULT_MODEL = "gpt-5.2-thinking"
     
     def __init__(
         self,
