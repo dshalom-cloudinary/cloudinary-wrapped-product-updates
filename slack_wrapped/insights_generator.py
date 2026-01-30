@@ -1,6 +1,7 @@
 """Insights generator for Slack Wrapped.
 
 Generates AI-powered insights, fun facts, and personality types using OpenAI.
+Supports two-pass content analysis for deeper semantic understanding.
 """
 
 import json
@@ -12,6 +13,7 @@ from .llm_client import LLMClient, LLMError
 from .models import (
     ChannelStats,
     ContributorStats,
+    SlackMessage,
     Insights,
     FunFact,
     Record,
@@ -20,6 +22,8 @@ from .models import (
     StatHighlight,
 )
 from .config import Config
+from .content_analyzer import ContentAnalyzer, ContentChunkSummary
+from .insight_synthesizer import InsightSynthesizer, VideoDataInsights
 
 logger = logging.getLogger(__name__)
 
@@ -565,7 +569,7 @@ def generate_all_insights(
     team_stats: Optional[dict[str, dict]] = None,
 ) -> tuple[Insights, list[ContributorStats]]:
     """
-    Generate all insights and personality types.
+    Generate all insights and personality types (single-pass mode).
     
     Convenience function that runs the full insights pipeline.
     
@@ -593,3 +597,224 @@ def generate_all_insights(
     updated_contributors = generator.assign_personalities(contributors, favorite_words)
     
     return insights, updated_contributors
+
+
+@dataclass
+class TwoPassResult:
+    """Result from two-pass content analysis."""
+    
+    # Pass 1 results
+    content_summaries: list[ContentChunkSummary]
+    
+    # Pass 2 results
+    video_insights: VideoDataInsights
+    
+    # Backward-compatible insights
+    insights: Insights
+    contributors: list[ContributorStats]
+    
+    # Token usage tracking
+    pass1_tokens: int = 0
+    pass2_tokens: int = 0
+    
+    @property
+    def total_tokens(self) -> int:
+        """Total tokens used across both passes."""
+        return self.pass1_tokens + self.pass2_tokens
+
+
+def generate_two_pass_insights(
+    llm_client: LLMClient,
+    config: Config,
+    messages: list[SlackMessage],
+    stats: ChannelStats,
+    contributors: list[ContributorStats],
+    top_words: list[tuple[str, int]],
+    top_emoji: list[tuple[str, int]],
+    favorite_words: dict[str, list[tuple[str, int]]],
+    team_stats: Optional[dict[str, dict]] = None,
+    content_model: str = "o3-mini",
+) -> TwoPassResult:
+    """
+    Generate insights using two-pass content analysis.
+    
+    Pass 1: Content extraction - semantic analysis of messages
+    Pass 2: Synthesis - combine content with stats for final insights
+    
+    Args:
+        llm_client: LLM client for API calls
+        config: Channel configuration
+        messages: Raw parsed messages for content analysis
+        stats: Channel statistics
+        contributors: Top contributors
+        top_words: Most used words
+        top_emoji: Most used emoji
+        favorite_words: Favorite words by username
+        team_stats: Optional team comparison statistics
+        content_model: Model to use for content analysis (default: o3-mini)
+        
+    Returns:
+        TwoPassResult with content summaries, video insights, and backward-compatible data
+    """
+    logger.info("Starting two-pass content analysis")
+    
+    # Track token usage
+    initial_tokens = llm_client.usage.total_tokens
+    
+    # === PASS 1: Content Analysis ===
+    logger.info(f"Pass 1: Analyzing content with {content_model}")
+    
+    content_analyzer = ContentAnalyzer(llm_client, model=content_model)
+    content_summaries = content_analyzer.analyze_all_content(
+        messages=messages,
+        year=config.channel.year,
+    )
+    
+    # Check for chunks that fell back to defaults (failed extraction)
+    fallback_chunks = [
+        s for s in content_summaries
+        if not s.topics and not s.achievements and not s.notable_quotes
+        and s.message_count > 0  # Only flag non-empty chunks with no extraction
+    ]
+    if fallback_chunks:
+        logger.warning(
+            f"Pass 1: {len(fallback_chunks)}/{len(content_summaries)} chunks "
+            f"had no content extracted (periods: {[c.period for c in fallback_chunks]}). "
+            "Pass 2 synthesis may have limited context."
+        )
+    
+    pass1_tokens = llm_client.usage.total_tokens - initial_tokens
+    logger.info(f"Pass 1 complete: {len(content_summaries)} chunks, {pass1_tokens} tokens")
+    
+    # === PASS 2: Insight Synthesis ===
+    logger.info("Pass 2: Synthesizing insights")
+    
+    mid_tokens = llm_client.usage.total_tokens
+    
+    synthesizer = InsightSynthesizer(
+        llm_client=llm_client,
+        include_roasts=config.preferences.include_roasts,
+    )
+    
+    video_insights = synthesizer.synthesize(
+        content_summaries=content_summaries,
+        stats=stats,
+        contributors=contributors,
+        channel_name=config.channel.name,
+        year=config.channel.year,
+    )
+    
+    pass2_tokens = llm_client.usage.total_tokens - mid_tokens
+    logger.info(f"Pass 2 complete: {pass2_tokens} tokens")
+    
+    # === Create backward-compatible Insights ===
+    # Convert video_insights to legacy Insights format for compatibility
+    insights = _convert_to_legacy_insights(video_insights)
+    
+    # Update contributors with personality types from synthesis
+    updated_contributors = _apply_personality_types(
+        contributors, video_insights.personality_types
+    )
+    
+    total_tokens = pass1_tokens + pass2_tokens
+    logger.info(f"Two-pass analysis complete: {total_tokens} total tokens")
+    
+    return TwoPassResult(
+        content_summaries=content_summaries,
+        video_insights=video_insights,
+        insights=insights,
+        contributors=updated_contributors,
+        pass1_tokens=pass1_tokens,
+        pass2_tokens=pass2_tokens,
+    )
+
+
+def _convert_to_legacy_insights(video_insights: VideoDataInsights) -> Insights:
+    """Convert VideoDataInsights to legacy Insights format."""
+    # Convert stats highlights to the legacy format
+    stats = []
+    for highlight in video_insights.stats_highlights[:5]:
+        stats.append(StatHighlight(
+            label=highlight if isinstance(highlight, str) else str(highlight),
+            value=0,
+            unit="",
+            context="",
+            trend="",
+        ))
+    
+    # Convert records
+    records = []
+    for r in video_insights.records[:5]:
+        if isinstance(r, dict):
+            records.append(Record(
+                title=r.get("title", ""),
+                winner=r.get("winner", ""),
+                value=r.get("value", 0),
+                unit=r.get("unit", ""),
+                comparison=r.get("comparison", ""),
+                quip=r.get("quip", ""),
+            ))
+    
+    # Convert superlatives
+    superlatives = []
+    for s in video_insights.superlatives[:5]:
+        if isinstance(s, dict):
+            superlatives.append(Superlative(
+                title=s.get("title", ""),
+                winner=s.get("winner", ""),
+                value=s.get("value", 0),
+                unit=s.get("unit", ""),
+                percentile=s.get("percentile", ""),
+                quip=s.get("quip", ""),
+            ))
+    
+    # Convert competitions
+    competitions = []
+    for c in video_insights.competitions[:3]:
+        if isinstance(c, dict):
+            competitions.append(Competition(
+                category=c.get("category", ""),
+                participants=c.get("participants", []),
+                scores=c.get("scores", []),
+                winner=c.get("winner", ""),
+                margin=c.get("margin", ""),
+                quip=c.get("quip", ""),
+            ))
+    
+    # Build interesting insights from topic highlights
+    interesting = []
+    for topic in video_insights.topic_highlights[:5]:
+        interesting.append(f"{topic.topic}: {topic.insight}")
+    
+    # Add year story as interesting insights
+    if video_insights.year_story:
+        interesting.insert(0, video_insights.year_story.climax)
+    
+    return Insights(
+        interesting=interesting,
+        funny=video_insights.roasts[:3],
+        stats=stats,
+        records=records,
+        competitions=competitions,
+        superlatives=superlatives,
+        roasts=video_insights.roasts,
+    )
+
+
+def _apply_personality_types(
+    contributors: list[ContributorStats],
+    personality_types: list,
+) -> list[ContributorStats]:
+    """Apply personality types from synthesis to contributors."""
+    # Create lookup by username
+    type_map = {
+        p.username: (p.personality_type, p.fun_fact)
+        for p in personality_types
+    }
+    
+    # Update contributors
+    for c in contributors:
+        if c.username in type_map:
+            c.personality_type, c.fun_fact = type_map[c.username]
+    
+    return contributors

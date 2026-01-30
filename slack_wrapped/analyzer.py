@@ -19,33 +19,46 @@ from .config import Config
 
 
 # Common English stop words to exclude from word analysis
+# Note: Using a set automatically handles any duplicates
 STOP_WORDS = {
+    # Articles, conjunctions, prepositions
     'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
-    'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare', 'ought',
-    'used', 'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he',
+    'of', 'with', 'by', 'from', 'as', 'into', 'through', 'during', 'before',
+    'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under',
+    # Verbs (be, have, do, modals)
+    'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had',
+    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+    'must', 'shall', 'can', 'need', 'dare', 'ought', 'used',
+    # Pronouns
+    'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he',
     'she', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your',
     'his', 'our', 'their', 'mine', 'yours', 'hers', 'ours', 'theirs',
+    # Question words and determiners
     'what', 'which', 'who', 'whom', 'when', 'where', 'why', 'how', 'all',
     'each', 'every', 'both', 'few', 'more', 'most', 'other', 'some', 'such',
+    # Adverbs and misc
     'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
     'just', 'also', 'now', 'here', 'there', 'then', 'if', 'because', 'about',
-    'into', 'through', 'during', 'before', 'after', 'above', 'below', 'up',
-    'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once',
+    'again', 'further', 'once',
+    # Contractions (positive)
     "i'm", "i've", "i'll", "i'd", "we're", "we've", "we'll", "we'd",
     "you're", "you've", "you'll", "you'd", "he's", "he'll", "he'd",
     "she's", "she'll", "she'd", "it's", "it'll", "they're", "they've",
     "they'll", "they'd", "that's", "that'll", "who's", "who'll", "who'd",
     "what's", "what'll", "where's", "when's", "why's", "how's",
+    "here's", "there's", "let's",
+    # Contractions (negative)
     "isn't", "aren't", "wasn't", "weren't", "hasn't", "haven't", "hadn't",
     "doesn't", "don't", "didn't", "won't", "wouldn't", "shan't", "shouldn't",
-    "can't", "cannot", "couldn't", "mustn't", "let's", "that's", "who's",
-    "what's", "here's", "there's", "when's", "where's", "why's", "how's",
-    'yeah', 'yes', 'no', 'ok', 'okay', 'hi', 'hey', 'hello', 'thanks',
+    "can't", "cannot", "couldn't", "mustn't",
+    # Common casual words
+    'yeah', 'yes', 'ok', 'okay', 'hi', 'hey', 'hello', 'thanks',
     'thank', 'please', 'sorry', 'got', 'get', 'going', 'go', 'know',
     'like', 'think', 'see', 'look', 'make', 'want', 'give', 'take',
 }
+
+# Day names constant - used for day of week calculations
+DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 # Emoji pattern for extraction
 EMOJI_PATTERN = re.compile(
@@ -121,9 +134,8 @@ class ChannelAnalyzer:
         hour_counts = Counter(msg.timestamp.hour for msg in self.messages)
         peak_hour = hour_counts.most_common(1)[0][0] if hour_counts else 12
         
-        # Peak day
-        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        peak_day = max(messages_by_day.items(), key=lambda x: x[1])[0] if messages_by_day else 'Tuesday'
+        # Peak day (empty string if no messages)
+        peak_day = max(messages_by_day.items(), key=lambda x: x[1])[0] if messages_by_day else ''
         
         # Average message length
         avg_length = total_words / total_messages if total_messages > 0 else 0
@@ -166,10 +178,9 @@ class ChannelAnalyzer:
     
     def _calculate_day_distribution(self) -> dict[str, int]:
         """Calculate message distribution by day of week."""
-        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         day_counts = Counter(msg.timestamp.weekday() for msg in self.messages)
         
-        return {day_names[i]: day_counts.get(i, 0) for i in range(7)}
+        return {DAY_NAMES[i]: day_counts.get(i, 0) for i in range(7)}
     
     def get_quarterly_activity(self) -> list[QuarterActivity]:
         """
@@ -500,10 +511,17 @@ def generate_fun_facts(
     display_hour = hour if hour <= 12 else hour - 12
     if display_hour == 0:
         display_hour = 12
+    
+    # Build detail text, handling empty peak_day
+    if stats.peak_day:
+        detail = f"{stats.peak_day}s are the busiest day"
+    else:
+        detail = "Based on channel activity"
+    
     facts.append(FunFact(
         label="Peak Hour",
         value=f"{display_hour}:00 {period}",
-        detail=f"{stats.peak_day}s are the busiest day",
+        detail=detail,
     ))
     
     # Average message length

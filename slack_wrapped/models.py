@@ -35,7 +35,12 @@ class SlackMessage:
 
 @dataclass
 class ChannelStats:
-    """Aggregate statistics for a Slack channel."""
+    """Aggregate statistics for a Slack channel.
+    
+    Note: peak_hour and peak_day have default values that are only used
+    when there are no messages to analyze. When messages exist, these
+    are calculated by ChannelAnalyzer.calculate_stats().
+    """
     
     total_messages: int
     total_words: int
@@ -44,8 +49,9 @@ class ChannelStats:
     messages_by_user: dict[str, int] = field(default_factory=dict)
     messages_by_quarter: dict[str, int] = field(default_factory=dict)
     messages_by_day_of_week: dict[str, int] = field(default_factory=dict)
-    peak_hour: int = 12
-    peak_day: str = "Tuesday"
+    # Default values used only when total_messages == 0
+    peak_hour: int = 0  # Midnight as a clear "no data" indicator
+    peak_day: str = ""  # Empty string as a clear "no data" indicator
     average_message_length: float = 0.0
     most_active_date: Optional[str] = None
     
@@ -219,6 +225,103 @@ class VideoDataMeta:
 
 
 @dataclass
+class ContentAnalysisYearStory:
+    """Year story narrative arc from content analysis."""
+    
+    opening: str
+    arc: str
+    climax: str
+    closing: str
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "opening": self.opening,
+            "arc": self.arc,
+            "climax": self.climax,
+            "closing": self.closing,
+        }
+
+
+@dataclass
+class ContentAnalysisTopicHighlight:
+    """Topic highlight from content analysis."""
+    
+    topic: str
+    insight: str
+    best_quote: str
+    period: str
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "topic": self.topic,
+            "insight": self.insight,
+            "bestQuote": self.best_quote,
+            "period": self.period,
+        }
+
+
+@dataclass
+class ContentAnalysisQuote:
+    """Quote with context from content analysis."""
+    
+    text: str
+    author: str
+    context: str
+    period: str
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "text": self.text,
+            "author": self.author,
+            "context": self.context,
+            "period": self.period,
+        }
+
+
+@dataclass
+class ContentAnalysisPersonality:
+    """Enhanced personality with evidence from content analysis."""
+    
+    username: str
+    display_name: str
+    personality_type: str
+    evidence: str
+    fun_fact: str
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "username": self.username,
+            "displayName": self.display_name,
+            "personalityType": self.personality_type,
+            "evidence": self.evidence,
+            "funFact": self.fun_fact,
+        }
+
+
+@dataclass
+class ContentAnalysis:
+    """Content analysis results for video rendering."""
+    
+    year_story: Optional[ContentAnalysisYearStory] = None
+    topic_highlights: list[ContentAnalysisTopicHighlight] = field(default_factory=list)
+    best_quotes: list[ContentAnalysisQuote] = field(default_factory=list)
+    personality_types: list[ContentAnalysisPersonality] = field(default_factory=list)
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "yearStory": self.year_story.to_dict() if self.year_story else None,
+            "topicHighlights": [t.to_dict() for t in self.topic_highlights],
+            "bestQuotes": [q.to_dict() for q in self.best_quotes],
+            "personalityTypes": [p.to_dict() for p in self.personality_types],
+        }
+
+
+@dataclass
 class VideoData:
     """Complete data structure for video rendering."""
     
@@ -228,10 +331,11 @@ class VideoData:
     fun_facts: list[FunFact]
     insights: Insights
     meta: VideoDataMeta
+    content_analysis: Optional[ContentAnalysis] = None
     
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dictionary matching Remotion schema."""
-        return {
+        result = {
             "channelStats": {
                 "totalMessages": self.channel_stats.total_messages,
                 "totalWords": self.channel_stats.total_words,
@@ -262,6 +366,12 @@ class VideoData:
             "insights": self.insights.to_dict(),
             "meta": self.meta.to_dict(),
         }
+        
+        # Add content analysis if available
+        if self.content_analysis:
+            result["contentAnalysis"] = self.content_analysis.to_dict()
+        
+        return result
     
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string."""

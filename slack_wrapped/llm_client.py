@@ -189,12 +189,15 @@ class LLMClient:
         """
         Get estimated cost based on usage.
         
-        Note: Uses approximate pricing, actual costs may vary.
+        Note: Uses approximate pricing as of 2025. Actual costs may vary.
+        OpenAI pricing changes frequently - check https://openai.com/pricing
+        for current rates.
         
         Returns:
-            Estimated cost in USD
+            Estimated cost in USD (approximate)
         """
-        # Approximate pricing per 1M tokens
+        # Approximate pricing per 1M tokens (as of 2025)
+        # These rates are estimates and may not reflect current pricing
         if "mini" in self.model.lower():
             input_rate = 0.25 / 1_000_000
             output_rate = 2.00 / 1_000_000
