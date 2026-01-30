@@ -1,7 +1,7 @@
 {
   "name": "wrapped-video",
   "version": "1.0.0",
-  "description": "GitHub Wrapped 2025 Video",
+  "description": "Slack Wrapped - Channel Activity Video Generator",
   "scripts": {
     "start": "npx remotion studio",
     "build": "node render.js",

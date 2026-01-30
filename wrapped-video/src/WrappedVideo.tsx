@@ -70,7 +70,7 @@ export const WrappedVideo: React.FC<WrappedVideoProps> = ({data}) => {
         {/* Intro */}
         <TransitionSeries.Sequence durationInFrames={INTRO_DURATION}>
           <IntroScene 
-            username={data.meta.username} 
+            username={data.meta.username ?? 'user'} 
             year={data.meta.year} 
           />
         </TransitionSeries.Sequence>
@@ -135,7 +135,7 @@ export const WrappedVideo: React.FC<WrappedVideoProps> = ({data}) => {
           <OutroScene
             yearInReview={data.yearInReview}
             stats={data.heroStats}
-            username={data.meta.username}
+            username={data.meta.username ?? 'user'}
             year={data.meta.year}
           />
         </TransitionSeries.Sequence>

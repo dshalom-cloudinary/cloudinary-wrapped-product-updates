@@ -84,17 +84,30 @@ export const calculateTotalDuration = (data: VideoData): number => {
   return totalSceneDuration - (TRANSITION_DURATION * NUM_TRANSITIONS);
 };
 
+// Slack-specific durations
+export const CHANNEL_STATS_DURATION = 240; // 8 seconds
+export const TOP_CONTRIBUTORS_DURATION = 240; // 8 seconds
+export const SPOTLIGHT_FRAMES_PER_CONTRIBUTOR = 90; // 3 seconds per contributor
+
+// Get spotlight scene total duration
+export const getSpotlightDuration = (contributorsCount: number): number => {
+  return SPOTLIGHT_FRAMES_PER_CONTRIBUTOR * Math.min(contributorsCount, 5);
+};
+
 // Calculate total duration for Slack video with content analysis
 export const calculateSlackTotalDuration = (data: SlackVideoData): number => {
   const FUN_FACTS_DURATION = getFunFactsDuration(data.funFacts.length);
   const CONTENT_ANALYSIS_DURATION = getContentAnalysisDuration(data.contentAnalysis);
+  const SPOTLIGHT_DURATION = data.topContributors 
+    ? getSpotlightDuration(data.topContributors.length) 
+    : 0;
   
-  // Base transitions: Intro -> Hero -> FunFacts -> Quarterly -> TopRepos -> Outro = 5 transitions
+  // Base transitions: Intro -> ChannelStats -> FunFacts -> Quarterly -> TopContributors -> Spotlight -> Outro = 6 transitions
   // With content analysis, add transitions for each enabled scene:
   // - yearStory adds 1 transition
   // - topicHighlights adds 1 transition  
   // - bestQuotes adds 1 transition
-  let numTransitions = 5; // Base transitions between core scenes
+  let numTransitions = 6; // Base transitions between core scenes
   
   if (data.contentAnalysis) {
     if (data.contentAnalysis.yearStory) {
@@ -110,11 +123,12 @@ export const calculateSlackTotalDuration = (data: SlackVideoData): number => {
 
   const totalSceneDuration = 
     INTRO_DURATION + 
-    HERO_STATS_DURATION + 
-    CONTENT_ANALYSIS_DURATION +  // New content scenes
+    CHANNEL_STATS_DURATION + 
+    CONTENT_ANALYSIS_DURATION +  // Content analysis scenes
     FUN_FACTS_DURATION + 
     QUARTERLY_DURATION + 
-    TOP_REPOS_DURATION + 
+    TOP_CONTRIBUTORS_DURATION + 
+    SPOTLIGHT_DURATION +
     OUTRO_DURATION;
 
   // Subtract overlap from transitions

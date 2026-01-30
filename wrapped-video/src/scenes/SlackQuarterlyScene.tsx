@@ -14,11 +14,11 @@ const {fontFamily} = loadFont('normal', {
   subsets: ['latin'],
 });
 
-type QuarterlySceneProps = {
+type SlackQuarterlySceneProps = {
   quarters: QuarterActivity[];
 };
 
-export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
+export const SlackQuarterlyScene: React.FC<SlackQuarterlySceneProps> = ({quarters}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
 
@@ -37,8 +37,16 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
     {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
   );
 
-  // Find max PRs for bar scaling (handle optional prs field)
-  const maxPRs = Math.max(...quarters.map((q) => q.prs ?? q.messages ?? 0));
+  // Use messages field, fallback to prs for backward compatibility
+  const getMessageCount = (q: QuarterActivity) => q.messages ?? q.prs ?? 0;
+
+  // Find max messages for bar scaling
+  const maxMessages = Math.max(...quarters.map(getMessageCount));
+
+  // Find quarter with highest messages
+  const maxQuarterIndex = quarters.findIndex(
+    (q) => getMessageCount(q) === maxMessages
+  );
 
   return (
     <AbsoluteFill
@@ -97,10 +105,12 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
             config: {damping: 80, stiffness: 120},
           });
 
+          const messageCount = getMessageCount(quarter);
           const maxBarHeight = 300;
-          const prCount = quarter.prs ?? quarter.messages ?? 0;
-          const barHeight = (prCount / maxPRs) * maxBarHeight;
+          const barHeight = (messageCount / maxMessages) * maxBarHeight;
           const animatedHeight = interpolate(barProgress, [0, 1], [0, barHeight]);
+
+          const isHighest = index === maxQuarterIndex;
 
           const colors = [
             {bar: 'linear-gradient(180deg, #22d3ee 0%, #0891b2 100%)', glow: '#22d3ee'},
@@ -121,17 +131,36 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
                 gap: 16,
               }}
             >
-              {/* PR count */}
+              {/* Highest badge */}
+              {isHighest && (
+                <div
+                  style={{
+                    opacity: barProgress,
+                    transform: `translateY(${interpolate(barProgress, [0, 1], [-20, 0])}px)`,
+                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                    padding: '4px 12px',
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#1a1a2e',
+                    marginBottom: -8,
+                  }}
+                >
+                  🔥 PEAK
+                </div>
+              )}
+
+              {/* Message count */}
               <div
                 style={{
                   fontSize: 32,
                   fontWeight: 800,
-                  color: 'white',
+                  color: isHighest ? '#fbbf24' : 'white',
                   opacity: barProgress,
                   transform: `translateY(${interpolate(barProgress, [0, 1], [20, 0])}px)`,
                 }}
               >
-                {Math.floor(interpolate(barProgress, [0, 1], [0, prCount]))}
+                {Math.floor(interpolate(barProgress, [0, 1], [0, messageCount]))}
               </div>
 
               {/* Bar container - fixed height to align all bars at the bottom */}
@@ -150,7 +179,10 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
                     height: animatedHeight,
                     background: color.bar,
                     borderRadius: '16px 16px 8px 8px',
-                    boxShadow: `0 0 40px ${color.glow}40`,
+                    boxShadow: isHighest
+                      ? `0 0 60px ${color.glow}60`
+                      : `0 0 40px ${color.glow}40`,
+                    border: isHighest ? '2px solid #fbbf24' : 'none',
                   }}
                 />
               </div>
@@ -160,7 +192,7 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
                 style={{
                   fontSize: 28,
                   fontWeight: 700,
-                  color: 'rgba(255, 255, 255, 0.9)',
+                  color: isHighest ? '#fbbf24' : 'rgba(255, 255, 255, 0.9)',
                   opacity: barProgress,
                 }}
               >
@@ -168,22 +200,24 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
               </div>
 
               {/* Highlight text */}
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 400,
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  maxWidth: 180,
-                  textAlign: 'center',
-                  opacity: barProgress,
-                  transform: `translateY(${interpolate(barProgress, [0, 1], [10, 0])}px)`,
-                  height: 60,
-                }}
-              >
-                {Array.isArray(quarter.highlights) 
-                  ? quarter.highlights[0] 
-                  : String(quarter.highlights).split(':')[0]}
-              </div>
+              {quarter.highlights && (
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 400,
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    maxWidth: 180,
+                    textAlign: 'center',
+                    opacity: barProgress,
+                    transform: `translateY(${interpolate(barProgress, [0, 1], [10, 0])}px)`,
+                    height: 60,
+                  }}
+                >
+                  {Array.isArray(quarter.highlights)
+                    ? quarter.highlights[0]
+                    : String(quarter.highlights).split(':')[0]}
+                </div>
+              )}
             </div>
           );
         })}
@@ -212,7 +246,7 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
             gap: 12,
           }}
         >
-          <span style={{fontSize: 24}}>📊</span>
+          <span style={{fontSize: 24}}>💬</span>
           <span
             style={{
               fontSize: 24,
@@ -220,7 +254,7 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
               color: 'white',
             }}
           >
-            Total: {quarters.reduce((sum, q) => sum + (q.prs ?? q.messages ?? 0), 0)} PRs
+            Total: {quarters.reduce((sum, q) => sum + getMessageCount(q), 0).toLocaleString()} Messages
           </span>
         </div>
       </div>

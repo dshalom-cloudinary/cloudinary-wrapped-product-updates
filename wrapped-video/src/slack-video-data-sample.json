@@ -1,0 +1,168 @@
+{
+  "channelStats": {
+    "totalMessages": 1247,
+    "totalWords": 45678,
+    "totalContributors": 23,
+    "activeDays": 187
+  },
+  "quarterlyActivity": [
+    {
+      "quarter": "Q1",
+      "messages": 287,
+      "highlights": ["Product launch discussions", "Team onboarding"]
+    },
+    {
+      "quarter": "Q2",
+      "messages": 412,
+      "highlights": ["Feature planning peak", "Customer feedback review"]
+    },
+    {
+      "quarter": "Q3",
+      "messages": 298,
+      "highlights": ["Summer updates", "Bug fix sprint"]
+    },
+    {
+      "quarter": "Q4",
+      "messages": 250,
+      "highlights": ["Year-end wrap up", "Holiday planning"]
+    }
+  ],
+  "topContributors": [
+    {
+      "username": "david.shalom",
+      "displayName": "David Shalom",
+      "team": "Product",
+      "messageCount": 156,
+      "contributionPercent": 12.5,
+      "funTitle": "The Announcer",
+      "funFact": "Favorite word: 'shipped' (used 47 times)"
+    },
+    {
+      "username": "alice.chen",
+      "displayName": "Alice Chen",
+      "team": "Engineering",
+      "messageCount": 134,
+      "contributionPercent": 10.7,
+      "funTitle": "The Early Bird",
+      "funFact": "Most active at 7am - before everyone else wakes up"
+    },
+    {
+      "username": "bob.wilson",
+      "displayName": "Bob Wilson",
+      "team": "Design",
+      "messageCount": 112,
+      "contributionPercent": 9.0,
+      "funTitle": "The Emoji Master",
+      "funFact": "Used 423 emojis this year - a new channel record"
+    },
+    {
+      "username": "carol.martinez",
+      "displayName": "Carol Martinez",
+      "team": "Engineering",
+      "messageCount": 98,
+      "contributionPercent": 7.9,
+      "funTitle": "The Thread Queen",
+      "funFact": "Started 67 threads - keeping conversations organized"
+    },
+    {
+      "username": "dan.kim",
+      "displayName": "Dan Kim",
+      "team": "Product",
+      "messageCount": 87,
+      "contributionPercent": 7.0,
+      "funTitle": "The Question Asker",
+      "funFact": "Asked 89 questions - always curious"
+    }
+  ],
+  "funFacts": [
+    {
+      "label": "Peak Hour",
+      "value": "2pm",
+      "detail": "Most messages are sent right after lunch - the productivity hour!"
+    },
+    {
+      "label": "Longest Message",
+      "value": 847,
+      "detail": "An epic 847-word product spec that sparked a 50-message thread"
+    },
+    {
+      "label": "Favorite Emoji",
+      "value": "🚀",
+      "detail": "The rocket emoji was used 234 times - this team loves shipping!"
+    },
+    {
+      "label": "Busiest Day",
+      "value": "Tuesday",
+      "detail": "Tuesdays had 23% more messages than any other day"
+    }
+  ],
+  "insights": {
+    "interesting": [
+      "Q2 was your most active quarter with 412 messages",
+      "The team grew from 18 to 23 contributors this year",
+      "Average message length increased 15% - more detailed discussions"
+    ],
+    "funny": [
+      "Someone typed 'just a quick question' 47 times - none were quick",
+      "The word 'urgent' appeared 89 times, usually on Fridays at 4pm"
+    ],
+    "stats": [],
+    "records": [],
+    "competitions": [],
+    "superlatives": [],
+    "roasts": [
+      "David's 'quick updates' averaged 200 words each",
+      "The team used 'ASAP' 156 times but the average response time was 4 hours"
+    ]
+  },
+  "meta": {
+    "channelName": "product-updates",
+    "year": 2025,
+    "generatedAt": "2026-01-30T12:00:00.000Z"
+  },
+  "contentAnalysis": {
+    "yearStory": {
+      "opening": "The year began with ambitious product goals and a team ready to ship.",
+      "arc": "Q2 saw unprecedented collaboration as the team rallied around the new feature launch.",
+      "climax": "The September release marked a turning point - your biggest update ever.",
+      "closing": "The year ended with a leaner, faster product and a stronger team."
+    },
+    "topicHighlights": [
+      {
+        "topic": "Feature Launches",
+        "insight": "47% of Q2 messages focused on the new dashboard",
+        "bestQuote": "It's live! The dashboard is finally in production!",
+        "period": "Q2 2025"
+      },
+      {
+        "topic": "Customer Feedback",
+        "insight": "User research dominated Q3 discussions",
+        "bestQuote": "The NPS score jumped 15 points after the redesign",
+        "period": "Q3 2025"
+      }
+    ],
+    "bestQuotes": [
+      {
+        "text": "We did it! Biggest launch of the year and zero incidents.",
+        "author": "David Shalom",
+        "context": "After the September release",
+        "period": "Q3 2025"
+      },
+      {
+        "text": "This is the smoothest sprint we've ever had.",
+        "author": "Alice Chen",
+        "context": "End of Q4 retrospective",
+        "period": "Q4 2025"
+      }
+    ],
+    "personalityTypes": [
+      {
+        "username": "david.shalom",
+        "displayName": "David Shalom",
+        "personalityType": "The Announcer",
+        "evidence": "47 'shipped' mentions, 23 launch announcements",
+        "funFact": "Never missed a weekly update"
+      }
+    ]
+  }
+}

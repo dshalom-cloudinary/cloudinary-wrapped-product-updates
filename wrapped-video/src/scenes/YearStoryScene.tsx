@@ -178,12 +178,12 @@ const StoryPart: React.FC<StoryPartProps> = ({part, label, emoji, color}) => {
 
 type YearStorySceneProps = {
   yearStory: YearStory;
-  channelName: string;
+  channelName?: string; // Optional - not used in current implementation
 };
 
 export const YEAR_STORY_PART_DURATION = 120; // 4 seconds per part at 30fps
 
-export const YearStoryScene: React.FC<YearStorySceneProps> = ({yearStory, channelName}) => {
+export const YearStoryScene: React.FC<YearStorySceneProps> = ({yearStory}) => {
   const parts = [
     {part: yearStory.opening, label: 'Opening', emoji: '🌅', color: '#6366f1'},
     {part: yearStory.arc, label: 'The Journey', emoji: '🚀', color: '#f97316'},
