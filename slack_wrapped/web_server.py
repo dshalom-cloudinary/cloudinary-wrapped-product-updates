@@ -177,13 +177,43 @@ SETUP_HTML = """
             </div>
         </div>
 
-        <!-- Step 4: User Mappings -->
+        <!-- Step 4: Context & Team Info -->
         <div id="step-4" class="step fade-in bg-gray-800 rounded-lg p-6 shadow-lg">
-            <h2 class="text-xl font-semibold mb-4">User Display Names</h2>
-            <p class="text-gray-400 mb-4">Edit display names for each contributor.</p>
+            <h2 class="text-xl font-semibold mb-4">Context & Team Information</h2>
+            <p class="text-gray-400 mb-4">
+                Provide additional context for the AI to understand your channel better.
+                Include team structure, who works on what, key projects, and any other relevant information.
+            </p>
             
-            <div id="user-mappings" class="space-y-2 max-h-80 overflow-y-auto">
-                <!-- Filled by JavaScript -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Channel Context</label>
+                <textarea id="channel-context" rows="12" 
+                    class="w-full bg-gray-700 rounded p-3 text-sm"
+                    placeholder="Example:
+Channel: product-updates
+Year: 2025
+
+Products by team:
+- Ehud, Yael, Eran - Media Flows
+- Nili, Avivit, Dan, Anat - Image Processing
+- David, Sharon B, Mai, Nadav - Assets Management
+- Raz - Video
+- Maayan - Accounts
+- Noa - Billing
+- Amit - Integration
+- Caroline, Sharon Y, Jackie - Documentation
+
+Key milestones:
+- Q1: Major SDK redesign
+- Q2: New video features launched
+- Q3: Performance improvements
+- Q4: Year-end wrap up
+
+Tone preferences:
+- Keep it professional but fun
+- Light roasts are okay
+- Focus on achievements"></textarea>
+                <p class="text-xs text-gray-500 mt-1">This context helps the AI generate more relevant and personalized content.</p>
             </div>
             
             <div class="flex gap-4 mt-6">
@@ -262,7 +292,7 @@ python -m slack_wrapped generate \\
             'Upload Messages',
             'Analysis Results', 
             'Channel Information',
-            'User Mappings',
+            'Context & Teams',
             'Review & Generate'
         ];
 
@@ -387,8 +417,68 @@ python -m slack_wrapped generate \\
             container.innerHTML = html;
         }
 
+        function prefillContext(data) {
+            // Build a context template based on analysis
+            const contextEl = document.getElementById('channel-context');
+            const ca = data.channel_analysis || {};
+            const users = data.user_suggestions || [];
+            
+            let context = `Channel: ${ca.likely_name || document.getElementById('channel-name').value || 'your-channel'}
+Year: ${data.year || new Date().getFullYear()}
+
+`;
+            
+            // Add purpose if detected
+            if (ca.purpose) {
+                context += `Purpose: ${ca.purpose}\n\n`;
+            }
+            
+            // List contributors
+            if (users.length > 0) {
+                context += `Contributors detected (${users.length}):\n`;
+                users.slice(0, 15).forEach(user => {
+                    const name = user.suggested_display_name || user.username;
+                    context += `- ${name} (${user.message_count || 0} messages)\n`;
+                });
+                if (users.length > 15) {
+                    context += `... and ${users.length - 15} more\n`;
+                }
+                context += `\n`;
+            }
+            
+            // Add detected topics
+            if (ca.main_topics && ca.main_topics.length > 0) {
+                context += `Main topics discussed:\n`;
+                ca.main_topics.forEach(topic => {
+                    context += `- ${topic}\n`;
+                });
+                context += `\n`;
+            }
+            
+            // Add placeholder for user to fill in
+            context += `---
+ADD YOUR CONTEXT BELOW:
+
+Teams/Products (who works on what):
+- 
+
+Key milestones or achievements:
+- 
+
+Special notes for the AI:
+- 
+`;
+            
+            contextEl.value = context;
+        }
+        
         function buildUserMappings(users) {
+            // Legacy function - now we use prefillContext
+            // Keep for compatibility but also call prefillContext
+            prefillContext(analysisData);
+            
             const container = document.getElementById('user-mappings');
+            if (!container) return;
             
             container.innerHTML = users.map((user, i) => `
                 <div class="flex items-center gap-2 bg-gray-700 rounded p-2">
@@ -404,42 +494,44 @@ python -m slack_wrapped generate \\
             `).join('');
         }
 
-        function collectUserMappings() {
-            const mappings = [];
-            document.querySelectorAll('#user-mappings input').forEach(input => {
-                mappings.push({
-                    slack_username: input.dataset.username,
-                    display_name: input.value
-                });
-            });
-            return mappings;
+        function getUserContext() {
+            // Get the free-form context text from the user
+            return document.getElementById('channel-context')?.value || '';
         }
 
         function updateConfigPreview() {
+            const userContext = getUserContext();
+            
             const config = {
                 channel: {
                     name: document.getElementById('channel-name').value,
                     year: parseInt(document.getElementById('year').value),
                     description: document.getElementById('channel-description').value
                 },
+                // Use detected teams as suggestions only
                 teams: analysisData?.team_suggestions?.map(t => ({
                     name: t.name,
                     members: t.members
                 })) || [],
-                userMappings: collectUserMappings().map(m => ({
-                    slackUsername: m.slack_username,
-                    displayName: m.display_name,
-                    team: ''
+                // Store detected users for reference
+                contributors: (analysisData?.user_suggestions || []).map(u => ({
+                    username: u.username,
+                    displayName: u.suggested_display_name || u.username,
+                    messageCount: u.message_count || 0
                 })),
                 preferences: {
                     includeRoasts: document.getElementById('include-roasts').checked,
                     topContributorsCount: parseInt(document.getElementById('top-count').value)
                 },
+                // The key context that will be passed to the LLM
                 context: {
+                    // Auto-detected context
                     channelPurpose: analysisData?.channel_analysis?.purpose || '',
                     majorThemes: analysisData?.channel_analysis?.main_topics || [],
                     keyMilestones: analysisData?.channel_analysis?.key_milestones || [],
-                    tone: analysisData?.channel_analysis?.tone || ''
+                    tone: analysisData?.channel_analysis?.tone || '',
+                    // User-provided free-form context (most important!)
+                    userProvidedContext: userContext
                 }
             };
             
