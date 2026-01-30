@@ -181,10 +181,13 @@ class TestInsightsGenerator:
     
     def test_generate_insights_success(self, mock_llm, config, stats, contributors):
         """Test successful insights generation."""
-        # Setup mock response
+        # Setup mock response with new enhanced format
         mock_llm.generate_json.return_value = json.dumps({
-            "interesting": ["Insight 1", "Insight 2"],
-            "funny": ["Roast 1"],
+            "insights": ["Insight 1", "Insight 2"],
+            "roasts": ["Roast 1"],
+            "records": [{"title": "Champion", "winner": "alice", "stat": "100 msgs", "quip": "Nice!"}],
+            "competitions": [],
+            "superlatives": [{"title": "The Pro", "winner": "bob", "stat": "50 avg", "quip": "Wow!"}],
         })
         
         generator = InsightsGenerator(mock_llm, config)
@@ -195,7 +198,9 @@ class TestInsightsGenerator:
         )
         
         assert len(insights.interesting) == 2
-        assert len(insights.funny) == 1
+        assert len(insights.roasts) == 1
+        assert len(insights.records) == 1
+        assert len(insights.superlatives) == 1
     
     def test_generate_insights_no_roasts(self, mock_llm, stats, contributors):
         """Test insights without roasts when disabled."""
@@ -205,8 +210,11 @@ class TestInsightsGenerator:
         )
         
         mock_llm.generate_json.return_value = json.dumps({
-            "interesting": ["Insight 1"],
-            "funny": ["Roast 1"],  # Should be excluded
+            "insights": ["Insight 1"],
+            "roasts": ["Roast 1"],  # Should be excluded
+            "records": [],
+            "competitions": [],
+            "superlatives": [],
         })
         
         generator = InsightsGenerator(mock_llm, config)
@@ -215,7 +223,7 @@ class TestInsightsGenerator:
         )
         
         assert len(insights.interesting) == 1
-        assert len(insights.funny) == 0  # Excluded
+        assert len(insights.roasts) == 0  # Excluded when include_roasts=False
     
     def test_generate_insights_fallback_on_error(self, mock_llm, config, stats, contributors):
         """Test fallback when LLM fails."""

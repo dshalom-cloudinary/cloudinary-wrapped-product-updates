@@ -258,6 +258,95 @@ class ContributorAnalyzer:
         
         # Return top N
         return contributors[:self.top_n]
+    
+    def get_team_stats(self) -> dict[str, dict]:
+        """
+        Calculate statistics by team.
+        
+        Returns:
+            Dict of team_name -> {messages, members, avg_per_person, words, top_contributor}
+        """
+        if not self.messages or not self.config:
+            return {}
+        
+        # Group messages by team
+        team_messages: dict[str, list[SlackMessage]] = defaultdict(list)
+        team_members: dict[str, set] = defaultdict(set)
+        
+        for msg in self.messages:
+            team = self.config.get_team(msg.username)
+            if team:
+                team_messages[team].append(msg)
+                team_members[team].add(msg.username)
+        
+        team_stats = {}
+        for team_name in team_messages:
+            msgs = team_messages[team_name]
+            members = team_members[team_name]
+            message_count = len(msgs)
+            member_count = len(members)
+            word_count = sum(len(m.message.split()) for m in msgs)
+            
+            # Find top contributor for this team
+            user_counts = Counter(m.username for m in msgs)
+            top_user = user_counts.most_common(1)[0][0] if user_counts else ""
+            top_user_display = self.config.get_display_name(top_user) if top_user else ""
+            
+            team_stats[team_name] = {
+                "messages": message_count,
+                "members": member_count,
+                "avg_per_person": round(message_count / member_count, 1) if member_count > 0 else 0,
+                "words": word_count,
+                "top_contributor": top_user_display,
+                "top_contributor_count": user_counts.get(top_user, 0) if top_user else 0,
+            }
+        
+        return team_stats
+    
+    def get_all_contributors(self) -> list[ContributorStats]:
+        """
+        Get all contributors (not just top N).
+        
+        Returns:
+            List of all ContributorStats sorted by message count
+        """
+        if not self.messages:
+            return []
+        
+        # Group messages by user
+        user_messages: dict[str, list[SlackMessage]] = defaultdict(list)
+        for msg in self.messages:
+            user_messages[msg.username].append(msg)
+        
+        total_messages = len(self.messages)
+        contributors = []
+        
+        for username, msgs in user_messages.items():
+            message_count = len(msgs)
+            word_count = sum(len(m.message.split()) for m in msgs)
+            contribution_percent = (message_count / total_messages) * 100 if total_messages > 0 else 0
+            avg_length = word_count / message_count if message_count > 0 else 0
+            
+            # Get display name and team from config
+            display_name = username
+            team = ""
+            if self.config:
+                display_name = self.config.get_display_name(username)
+                team = self.config.get_team(username)
+            
+            contributors.append(ContributorStats(
+                username=username,
+                display_name=display_name,
+                team=team,
+                message_count=message_count,
+                word_count=word_count,
+                contribution_percent=round(contribution_percent, 2),
+                average_message_length=round(avg_length, 2),
+            ))
+        
+        # Sort by message count descending
+        contributors.sort(key=lambda c: c.message_count, reverse=True)
+        return contributors
 
 
 class WordAnalyzer:

@@ -111,15 +111,71 @@ class FunFact:
 
 
 @dataclass
-class Insights:
-    """AI-generated insights about the channel."""
+class Record:
+    """A record/achievement held by a user or team."""
     
-    interesting: list[str] = field(default_factory=list)
-    funny: list[str] = field(default_factory=list)
+    title: str  # e.g., "Message Champion", "Most Active Quarter"
+    winner: str  # username or team name
+    stat: str  # e.g., "156 messages", "Q2 with 312 messages"
+    quip: str  # Fun one-liner about this achievement
     
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dictionary."""
         return asdict(self)
+
+
+@dataclass
+class Competition:
+    """A competition/comparison between teams or users."""
+    
+    type: str  # "team_vs_team", "user_vs_user", "quarter_vs_quarter"
+    participants: list[str]  # Team names or usernames
+    scores: list[int]  # Corresponding scores
+    quip: str  # Witty comparison
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class Superlative:
+    """A fun superlative/title awarded to a contributor."""
+    
+    title: str  # e.g., "The Novelist", "The Emoji Artist"
+    winner: str  # username
+    stat: str  # Supporting statistic
+    quip: str  # Fun description
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class Insights:
+    """AI-generated insights about the channel."""
+    
+    # Legacy fields (kept for backward compatibility)
+    interesting: list[str] = field(default_factory=list)
+    funny: list[str] = field(default_factory=list)
+    
+    # New enhanced fields
+    records: list[Record] = field(default_factory=list)
+    competitions: list[Competition] = field(default_factory=list)
+    superlatives: list[Superlative] = field(default_factory=list)
+    roasts: list[str] = field(default_factory=list)
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "interesting": self.interesting,
+            "funny": self.funny,
+            "records": [r.to_dict() for r in self.records],
+            "competitions": [c.to_dict() for c in self.competitions],
+            "superlatives": [s.to_dict() for s in self.superlatives],
+            "roasts": self.roasts,
+        }
 
 
 @dataclass
