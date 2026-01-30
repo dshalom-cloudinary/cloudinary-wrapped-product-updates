@@ -116,7 +116,9 @@ class Record:
     
     title: str  # e.g., "Message Champion", "Most Active Quarter"
     winner: str  # username or team name
-    stat: str  # e.g., "156 messages", "Q2 with 312 messages"
+    value: int  # The numeric value (e.g., 156 for "156 messages")
+    unit: str  # The unit (e.g., "messages", "words", "%")
+    comparison: str  # How it compares (e.g., "34% of total", "2x the average")
     quip: str  # Fun one-liner about this achievement
     
     def to_dict(self) -> dict:
@@ -128,9 +130,11 @@ class Record:
 class Competition:
     """A competition/comparison between teams or users."""
     
-    type: str  # "team_vs_team", "user_vs_user", "quarter_vs_quarter"
+    category: str  # What's being compared (e.g., "Total Messages", "Avg Words/Message")
     participants: list[str]  # Team names or usernames
     scores: list[int]  # Corresponding scores
+    winner: str  # Who won
+    margin: str  # Winning margin (e.g., "+5 messages", "23% more")
     quip: str  # Witty comparison
     
     def to_dict(self) -> dict:
@@ -144,8 +148,25 @@ class Superlative:
     
     title: str  # e.g., "The Novelist", "The Emoji Artist"
     winner: str  # username
-    stat: str  # Supporting statistic
+    value: float  # The numeric value
+    unit: str  # The unit
+    percentile: str  # How they rank (e.g., "Top 1", "#1 of 4")
     quip: str  # Fun description
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class StatHighlight:
+    """A data-driven statistic highlight."""
+    
+    label: str  # e.g., "Messages Per Active Day"
+    value: float  # The numeric value
+    unit: str  # The unit
+    context: str  # Context or comparison
+    trend: str  # Optional trend indicator (up, down, stable)
     
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dictionary."""
@@ -160,7 +181,8 @@ class Insights:
     interesting: list[str] = field(default_factory=list)
     funny: list[str] = field(default_factory=list)
     
-    # New enhanced fields
+    # Enhanced data-driven fields
+    stats: list[StatHighlight] = field(default_factory=list)
     records: list[Record] = field(default_factory=list)
     competitions: list[Competition] = field(default_factory=list)
     superlatives: list[Superlative] = field(default_factory=list)
@@ -171,6 +193,7 @@ class Insights:
         return {
             "interesting": self.interesting,
             "funny": self.funny,
+            "stats": [s.to_dict() for s in self.stats],
             "records": [r.to_dict() for r in self.records],
             "competitions": [c.to_dict() for c in self.competitions],
             "superlatives": [s.to_dict() for s in self.superlatives],

@@ -181,13 +181,14 @@ class TestInsightsGenerator:
     
     def test_generate_insights_success(self, mock_llm, config, stats, contributors):
         """Test successful insights generation."""
-        # Setup mock response with new enhanced format
+        # Setup mock response with new data-driven format
         mock_llm.generate_json.return_value = json.dumps({
             "insights": ["Insight 1", "Insight 2"],
             "roasts": ["Roast 1"],
-            "records": [{"title": "Champion", "winner": "alice", "stat": "100 msgs", "quip": "Nice!"}],
-            "competitions": [],
-            "superlatives": [{"title": "The Pro", "winner": "bob", "stat": "50 avg", "quip": "Wow!"}],
+            "stats": [{"label": "Msg/Day", "value": 1.5, "unit": "messages", "context": "test"}],
+            "records": [{"title": "Champion", "winner": "alice", "value": 100, "unit": "messages", "comparison": "50%", "quip": "Nice!"}],
+            "competitions": [{"category": "Messages", "participants": ["A", "B"], "scores": [10, 5], "winner": "A", "margin": "+5", "quip": "Win!"}],
+            "superlatives": [{"title": "The Pro", "winner": "bob", "value": 50.0, "unit": "words", "percentile": "#1", "quip": "Wow!"}],
         })
         
         generator = InsightsGenerator(mock_llm, config)
@@ -199,8 +200,12 @@ class TestInsightsGenerator:
         
         assert len(insights.interesting) == 2
         assert len(insights.roasts) == 1
+        assert len(insights.stats) == 1
         assert len(insights.records) == 1
         assert len(insights.superlatives) == 1
+        assert len(insights.competitions) == 1
+        assert insights.records[0].value == 100
+        assert insights.superlatives[0].value == 50.0
     
     def test_generate_insights_no_roasts(self, mock_llm, stats, contributors):
         """Test insights without roasts when disabled."""
@@ -212,6 +217,7 @@ class TestInsightsGenerator:
         mock_llm.generate_json.return_value = json.dumps({
             "insights": ["Insight 1"],
             "roasts": ["Roast 1"],  # Should be excluded
+            "stats": [],
             "records": [],
             "competitions": [],
             "superlatives": [],

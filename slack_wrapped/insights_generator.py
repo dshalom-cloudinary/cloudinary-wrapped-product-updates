@@ -17,6 +17,7 @@ from .models import (
     Record,
     Competition,
     Superlative,
+    StatHighlight,
 )
 from .config import Config
 
@@ -61,99 +62,123 @@ RULES:
 """
 
 # Prompt template for generating insights
-INSIGHTS_PROMPT_TEMPLATE = """Analyze these Slack channel statistics and create engaging, fun insights for a "Wrapped" video.
+INSIGHTS_PROMPT_TEMPLATE = """Create a DATA-DRIVEN "Wrapped" analysis. Every output MUST include specific numbers.
 
-CHANNEL: {channel_name}
-YEAR: {year}
+CHANNEL: {channel_name} | YEAR: {year}
 
-═══════════════════════════════════════════════════
-CHANNEL STATISTICS
-═══════════════════════════════════════════════════
-- Total messages: {total_messages:,}
-- Total words: {total_words:,}
-- Total contributors: {total_contributors}
-- Active days: {active_days}
-- Average message length: {avg_length:.1f} words
-- Peak hour: {peak_hour}:00 ({peak_day}s are busiest)
+══════════════════════════════════════════════════════════════════════
+                         RAW DATA
+══════════════════════════════════════════════════════════════════════
 
-═══════════════════════════════════════════════════
-QUARTERLY ACTIVITY
-═══════════════════════════════════════════════════
+CHANNEL TOTALS:
+  Messages: {total_messages:,} | Words: {total_words:,} | Contributors: {total_contributors}
+  Active Days: {active_days} | Avg Msg Length: {avg_length:.1f} words
+  Peak: {peak_hour}:00 on {peak_day}s
+
+QUARTERLY BREAKDOWN:
 {quarterly_breakdown}
 
-═══════════════════════════════════════════════════
-TEAM BREAKDOWN
-═══════════════════════════════════════════════════
+TEAM COMPARISON:
 {team_breakdown}
 
-═══════════════════════════════════════════════════
-TOP CONTRIBUTORS (The Leaderboard)
-═══════════════════════════════════════════════════
+LEADERBOARD:
 {top_contributors}
 
-═══════════════════════════════════════════════════
-VOCABULARY
-═══════════════════════════════════════════════════
-Most used words: {top_words}
-Favorite emoji: {top_emoji}
+TOP WORDS: {top_words}
+TOP EMOJI: {top_emoji}
 
-═══════════════════════════════════════════════════
-EXAMPLE OUTPUTS (for style reference)
-═══════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════
+                      REQUIRED OUTPUT FORMAT
+══════════════════════════════════════════════════════════════════════
 
-Example 1 - Quarterly comparison:
-INPUT: Q2 had 312 messages, Q4 had 89
-OUTPUT: "Q2 was ON FIRE with 312 messages - someone discovered coffee! Q4? The team was 'conserving energy' with just 89. Holiday mode activated early."
-
-Example 2 - Top contributor celebration:
-INPUT: david.shalom sent 34% of messages
-OUTPUT: "David Shalom carried the conversation harder than a group project partner - 34% of all messages! The rest of you owe him a coffee. ☕"
-
-Example 3 - Team competition:
-INPUT: Backend: 450 msgs, Frontend: 380 msgs
-OUTPUT: "Backend vs Frontend: The eternal rivalry! Backend takes the trophy with 450 messages. Frontend's response? 'We were too busy shipping pixels.' 🏆"
-
-Example 4 - Time pattern insight:
-INPUT: Peak hour 9:00, Monday busiest
-OUTPUT: "Monday mornings at 9am - when the team collectively remembers Slack exists. 47% of messages happened before lunch. Afternoon? Apparently coding time."
-
-Example 5 - Fun comparison:
-INPUT: 1,247 total messages, 45,678 words
-OUTPUT: "With 45,678 words exchanged, the team wrote the equivalent of a short novel. Working title: 'The Chronicles of Shipped Features' 📚"
-
-═══════════════════════════════════════════════════
-YOUR TASK
-═══════════════════════════════════════════════════
-
-Generate a JSON response with this structure:
+Generate JSON with NUMBERS IN EVERY FIELD:
 
 {{
+  "stats": [
+    {{
+      "label": "Messages Per Active Day",
+      "value": 1.12,
+      "unit": "messages/day",
+      "context": "That's 1 message every 7.1 hours of active time"
+    }},
+    {{
+      "label": "Words Written",
+      "value": 269,
+      "unit": "words",
+      "context": "Equivalent to 1 page of a novel"
+    }},
+    {{
+      "label": "Team Participation Rate",
+      "value": 100,
+      "unit": "%",
+      "context": "All 4 contributors posted at least once"
+    }}
+  ],
   "records": [
-    {{"title": "Message Champion", "winner": "username", "stat": "156 messages", "quip": "Fun one-liner about this achievement"}}
+    {{
+      "title": "Message Champion",
+      "winner": "David Shalom",
+      "value": 16,
+      "unit": "messages",
+      "comparison": "34% of total, 1.5x the runner-up",
+      "quip": "Carried the channel harder than Atlas carried the world"
+    }}
   ],
   "competitions": [
-    {{"type": "team_vs_team", "teams": ["Backend", "Frontend"], "scores": [450, 380], "quip": "Witty comparison"}}
+    {{
+      "category": "Total Messages",
+      "participants": ["Backend", "Frontend"],
+      "scores": [26, 21],
+      "winner": "Backend",
+      "margin": "+5 messages (24% more)",
+      "quip": "Backend wins quantity. Frontend claims quality. The debate continues."
+    }}
   ],
   "superlatives": [
-    {{"title": "The Novelist", "winner": "username", "stat": "42 avg words/msg", "quip": "They never met a message they couldn't elaborate on"}}
+    {{
+      "title": "The Novelist",
+      "winner": "david.shalom",
+      "value": 6.8,
+      "unit": "words/msg",
+      "percentile": "#1 of 4",
+      "quip": "Uses 26% more words per message than the team average"
+    }}
   ],
   "insights": [
-    "Interesting pattern or achievement with specific numbers...",
-    "Another data-driven observation with a fun spin..."
+    "Q1 dominated with 16 messages (34% of yearly total) - the team peaked early",
+    "Peak hour 9:00 AM saw 12 messages (26% of total) - morning productivity confirmed"
   ],
   "roasts": [
-    "Gentle, funny observation about the data (not targeting individuals negatively)..."
+    "With only 1.1 messages per active day, the channel embraced the art of quality silence"
   ]
 }}
 
-Generate:
-- 2-3 records (achievements with clear winners)
-- 1-2 team competitions (if multiple teams exist)
-- 3-4 superlatives (fun titles for contributors)
-- 3-5 insights (interesting patterns)
-- 2-3 roasts (gentle, data-based humor)
+══════════════════════════════════════════════════════════════════════
+                        STATISTICS TO CALCULATE
+══════════════════════════════════════════════════════════════════════
 
-Make it feel like a sports broadcast meets year-end celebration!"""
+MUST INCLUDE these calculated stats:
+1. Messages per day (total_messages / active_days)
+2. Words per message (total_words / total_messages)
+3. Contribution distribution (top person % vs rest)
+4. Quarter comparison (best vs worst quarter, % difference)
+5. Team comparison (if teams exist) with margin
+
+RECORDS to identify:
+- Message Champion (most messages)
+- Wordsmith (most words)
+- Consistent Contributor (most even distribution across quarters)
+- Most Active Quarter
+
+SUPERLATIVES with data:
+- Use actual numbers: "6.8 words/msg", "34% contribution", "#1 of 4"
+- Include percentiles or rankings
+- Show how they compare to average
+
+══════════════════════════════════════════════════════════════════════
+
+Generate 4-5 stats, 2-3 records, 1-2 competitions, 3-4 superlatives, 3-5 insights, 2-3 roasts.
+EVERY item must reference specific numbers from the data!"""
 
 
 # Prompt for personality type assignment
@@ -331,33 +356,50 @@ class InsightsGenerator:
             # Parse JSON response
             data = self._parse_json_response(response)
             
-            # Parse records
+            # Parse stats (new data-driven highlights)
+            stat_highlights = []
+            for s in data.get("stats", []):
+                stat_highlights.append(StatHighlight(
+                    label=s.get("label", ""),
+                    value=float(s.get("value", 0)),
+                    unit=s.get("unit", ""),
+                    context=s.get("context", ""),
+                    trend=s.get("trend", ""),
+                ))
+            
+            # Parse records with numeric values
             records = []
             for r in data.get("records", []):
                 records.append(Record(
                     title=r.get("title", ""),
                     winner=r.get("winner", ""),
-                    stat=r.get("stat", ""),
+                    value=int(r.get("value", 0)),
+                    unit=r.get("unit", ""),
+                    comparison=r.get("comparison", r.get("stat", "")),  # Fallback to stat
                     quip=r.get("quip", ""),
                 ))
             
-            # Parse competitions
+            # Parse competitions with category and margin
             competitions = []
             for c in data.get("competitions", []):
                 competitions.append(Competition(
-                    type=c.get("type", ""),
-                    participants=c.get("teams", c.get("participants", [])),
+                    category=c.get("category", c.get("type", "")),
+                    participants=c.get("participants", c.get("teams", [])),
                     scores=c.get("scores", []),
+                    winner=c.get("winner", ""),
+                    margin=c.get("margin", ""),
                     quip=c.get("quip", ""),
                 ))
             
-            # Parse superlatives
+            # Parse superlatives with numeric values
             superlatives = []
             for s in data.get("superlatives", []):
                 superlatives.append(Superlative(
                     title=s.get("title", ""),
                     winner=s.get("winner", ""),
-                    stat=s.get("stat", ""),
+                    value=float(s.get("value", 0)),
+                    unit=s.get("unit", s.get("stat", "")),  # Fallback to stat
+                    percentile=s.get("percentile", ""),
                     quip=s.get("quip", ""),
                 ))
             
@@ -367,6 +409,7 @@ class InsightsGenerator:
             return Insights(
                 interesting=data.get("insights", []),
                 funny=roasts,  # Keep backward compatibility
+                stats=stat_highlights,
                 records=records,
                 competitions=competitions,
                 superlatives=superlatives,
