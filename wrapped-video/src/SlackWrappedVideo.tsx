@@ -108,10 +108,10 @@ export const SlackWrappedVideo: React.FC<SlackWrappedVideoProps> = ({data}) => {
         />
 
         {/* Year Story (if available) */}
-        {hasYearStory && (
+        {hasYearStory && data.contentAnalysis?.yearStory && (
           <>
             <TransitionSeries.Sequence durationInFrames={YEAR_STORY_DURATION}>
-              <YearStoryScene yearStory={data.contentAnalysis!.yearStory!} />
+              <YearStoryScene yearStory={data.contentAnalysis.yearStory} />
             </TransitionSeries.Sequence>
 
             <TransitionSeries.Transition
@@ -122,10 +122,10 @@ export const SlackWrappedVideo: React.FC<SlackWrappedVideoProps> = ({data}) => {
         )}
 
         {/* Topic Highlights (if available) */}
-        {hasTopics && (
+        {hasTopics && data.contentAnalysis?.topicHighlights && (
           <>
             <TransitionSeries.Sequence durationInFrames={TOPICS_DURATION}>
-              <TopicHighlightsScene topics={data.contentAnalysis!.topicHighlights} />
+              <TopicHighlightsScene topics={data.contentAnalysis.topicHighlights} />
             </TransitionSeries.Sequence>
 
             <TransitionSeries.Transition
@@ -136,10 +136,10 @@ export const SlackWrappedVideo: React.FC<SlackWrappedVideoProps> = ({data}) => {
         )}
 
         {/* Best Quotes (if available) */}
-        {hasQuotes && (
+        {hasQuotes && data.contentAnalysis?.bestQuotes && (
           <>
             <TransitionSeries.Sequence durationInFrames={QUOTES_DURATION}>
-              <BestQuoteScene quotes={data.contentAnalysis!.bestQuotes} />
+              <BestQuoteScene quotes={data.contentAnalysis.bestQuotes} />
             </TransitionSeries.Sequence>
 
             <TransitionSeries.Transition

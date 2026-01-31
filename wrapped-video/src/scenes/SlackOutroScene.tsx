@@ -9,7 +9,7 @@ import {
   spring,
 } from 'remotion';
 import {loadFont} from '@remotion/google-fonts/Poppins';
-import type {ChannelStats, Insights} from '../types';
+import type {ChannelStats} from '../types';
 
 const {fontFamily} = loadFont('normal', {
   weights: ['400', '600', '700', '800'],

@@ -220,7 +220,7 @@ export const QuarterlyScene: React.FC<QuarterlySceneProps> = ({quarters}) => {
               color: 'white',
             }}
           >
-            Total: {quarters.reduce((sum, q) => sum + (q.prs ?? q.messages ?? 0), 0)} PRs
+            Total: {quarters.reduce((sum, q) => sum + (q.prs ?? q.messages ?? 0), 0).toLocaleString()} Messages
           </span>
         </div>
       </div>

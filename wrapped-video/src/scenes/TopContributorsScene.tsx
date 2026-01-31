@@ -130,6 +130,7 @@ export const TopContributorsScene: React.FC<TopContributorsSceneProps> = ({contr
             <div
               key={contributor.username}
               style={{
+                position: 'relative',
                 transform: `translateY(${interpolate(cardProgress, [0, 1], [80, 0])}px) scale(${interpolate(cardProgress, [0, 1], [0.9, 1])})`,
                 opacity: cardProgress,
                 background: isFirst

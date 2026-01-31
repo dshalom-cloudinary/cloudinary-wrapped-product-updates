@@ -254,6 +254,3 @@ export const SpotlightScene: React.FC<SpotlightSceneProps> = ({
     </AbsoluteFill>
   );
 };
-
-// Export frames per contributor for duration calculations
-export const SPOTLIGHT_FRAMES_PER_CONTRIBUTOR = FRAMES_PER_CONTRIBUTOR;

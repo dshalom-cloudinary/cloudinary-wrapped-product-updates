@@ -3,7 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const REQUIRED_FIELDS = [
+// ============================================
+// LEGACY GITHUB SCHEMA
+// ============================================
+
+const GITHUB_REQUIRED_FIELDS = [
   'heroStats',
   'funFacts',
   'bigRocks',
@@ -21,13 +25,148 @@ const HERO_STATS_FIELDS = [
   'repositoriesContributed'
 ];
 
-const META_FIELDS = ['username', 'year', 'generatedAt'];
+const GITHUB_META_FIELDS = ['username', 'year', 'generatedAt'];
 
-function validateVideoData(data) {
+// ============================================
+// SLACK WRAPPED SCHEMA
+// ============================================
+
+const SLACK_REQUIRED_FIELDS = [
+  'channelStats',
+  'quarterlyActivity',
+  'topContributors',
+  'funFacts',
+  'insights',
+  'meta'
+];
+
+const CHANNEL_STATS_FIELDS = [
+  'totalMessages',
+  'totalWords',
+  'totalContributors',
+  'activeDays'
+];
+
+const SLACK_META_FIELDS = ['channelName', 'year', 'generatedAt'];
+
+// ============================================
+// DETECT DATA TYPE
+// ============================================
+
+function isSlackData(data) {
+  return 'channelStats' in data && 'topContributors' in data;
+}
+
+// ============================================
+// SLACK VALIDATION
+// ============================================
+
+function validateSlackVideoData(data) {
   const errors = [];
 
   // Check top-level required fields
-  for (const field of REQUIRED_FIELDS) {
+  for (const field of SLACK_REQUIRED_FIELDS) {
+    if (!(field in data)) {
+      errors.push(`Missing required field: ${field}`);
+    }
+  }
+
+  // Validate channelStats
+  if (data.channelStats) {
+    for (const field of CHANNEL_STATS_FIELDS) {
+      if (!(field in data.channelStats)) {
+        errors.push(`Missing channelStats.${field}`);
+      }
+    }
+  }
+
+  // Validate funFacts is an array with items
+  if (data.funFacts) {
+    if (!Array.isArray(data.funFacts)) {
+      errors.push('funFacts must be an array');
+    } else {
+      data.funFacts.forEach((fact, i) => {
+        if (!fact.label) errors.push(`funFacts[${i}] missing label`);
+        if (fact.value === undefined) errors.push(`funFacts[${i}] missing value`);
+        if (!fact.detail) errors.push(`funFacts[${i}] missing detail`);
+      });
+    }
+  }
+
+  // Validate quarterlyActivity
+  if (data.quarterlyActivity) {
+    if (!Array.isArray(data.quarterlyActivity)) {
+      errors.push('quarterlyActivity must be an array');
+    } else if (data.quarterlyActivity.length !== 4) {
+      errors.push(`quarterlyActivity should have 4 quarters, found ${data.quarterlyActivity.length}`);
+    } else {
+      data.quarterlyActivity.forEach((q, i) => {
+        if (!q.quarter) errors.push(`quarterlyActivity[${i}] missing quarter`);
+        if (q.messages === undefined && q.prs === undefined) {
+          errors.push(`quarterlyActivity[${i}] missing messages`);
+        }
+        if (!q.highlights) errors.push(`quarterlyActivity[${i}] missing highlights`);
+      });
+    }
+  }
+
+  // Validate topContributors
+  if (data.topContributors) {
+    if (!Array.isArray(data.topContributors)) {
+      errors.push('topContributors must be an array');
+    } else if (data.topContributors.length === 0) {
+      errors.push('topContributors array is empty');
+    } else {
+      data.topContributors.forEach((c, i) => {
+        if (!c.username) errors.push(`topContributors[${i}] missing username`);
+        if (!c.displayName) errors.push(`topContributors[${i}] missing displayName`);
+        if (c.messageCount === undefined) errors.push(`topContributors[${i}] missing messageCount`);
+        if (c.contributionPercent === undefined) errors.push(`topContributors[${i}] missing contributionPercent`);
+      });
+    }
+  }
+
+  // Validate insights
+  if (data.insights) {
+    if (typeof data.insights !== 'object') {
+      errors.push('insights must be an object');
+    }
+  }
+
+  // Validate meta
+  if (data.meta) {
+    for (const field of SLACK_META_FIELDS) {
+      if (!(field in data.meta)) {
+        errors.push(`Missing meta.${field}`);
+      }
+    }
+  }
+
+  // Validate contentAnalysis (optional)
+  if (data.contentAnalysis) {
+    if (data.contentAnalysis.topicHighlights && !Array.isArray(data.contentAnalysis.topicHighlights)) {
+      errors.push('contentAnalysis.topicHighlights must be an array');
+    }
+    if (data.contentAnalysis.bestQuotes && !Array.isArray(data.contentAnalysis.bestQuotes)) {
+      errors.push('contentAnalysis.bestQuotes must be an array');
+    }
+    if (data.contentAnalysis.personalityTypes && !Array.isArray(data.contentAnalysis.personalityTypes)) {
+      errors.push('contentAnalysis.personalityTypes must be an array');
+    }
+  }
+
+  return errors;
+}
+
+// ============================================
+// GITHUB VALIDATION (Legacy)
+// ============================================
+
+function validateGitHubVideoData(data) {
+  const errors = [];
+
+  // Check top-level required fields
+  for (const field of GITHUB_REQUIRED_FIELDS) {
     if (!(field in data)) {
       errors.push(`Missing required field: ${field}`);
     }
@@ -111,7 +250,7 @@ function validateVideoData(data) {
 
   // Validate meta
   if (data.meta) {
-    for (const field of META_FIELDS) {
+    for (const field of GITHUB_META_FIELDS) {
       if (!(field in data.meta)) {
         errors.push(`Missing meta.${field}`);
       }
@@ -119,6 +258,17 @@ function validateVideoData(data) {
   }
 
   return errors;
+}
+
+// ============================================
+// UNIFIED VALIDATION
+// ============================================
+
+function validateVideoData(data) {
+  if (isSlackData(data)) {
+    return validateSlackVideoData(data);
+  }
+  return validateGitHubVideoData(data);
 }
 
 function main() {
@@ -160,7 +310,12 @@ function main() {
   // Copy to destination
   try {
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
-    console.log(`✓ Validated and copied video data for ${data.meta.username} (${data.meta.year})`);
+    // Handle both Slack and GitHub data types
+    const identifier = isSlackData(data) 
+      ? `#${data.meta.channelName}` 
+      : data.meta.username;
+    const dataType = isSlackData(data) ? 'Slack' : 'GitHub';
+    console.log(`✓ Validated and copied ${dataType} video data for ${identifier} (${data.meta.year})`);
     console.log(`  → ${outputPath}`);
   } catch (err) {
     console.error(`Error: Failed to write output file: ${err.message}`);

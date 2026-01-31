@@ -309,6 +309,152 @@ class TestE2EMessagesWithDifferentFormats:
         assert isinstance(messages, list)
 
 
+class TestE2EWithContentAnalysis:
+    """End-to-end tests with content analysis included."""
+
+    def test_video_data_with_content_analysis(self):
+        """Test video data generation with content analysis."""
+        from slack_wrapped.models import (
+            ContentAnalysis,
+            ContentAnalysisYearStory,
+            ContentAnalysisTopicHighlight,
+            ContentAnalysisQuote,
+            ContentAnalysisPersonality,
+        )
+        
+        # Parse and analyze
+        parser = SlackParser()
+        messages = parser.parse_file(str(SAMPLE_MESSAGES_FILE))
+        
+        config = Config.load(str(SAMPLE_CONFIG_FILE))
+        
+        channel_analyzer = ChannelAnalyzer(messages)
+        stats = channel_analyzer.calculate_stats()
+        quarters = channel_analyzer.get_quarterly_activity()
+        
+        contributor_analyzer = ContributorAnalyzer(messages, config)
+        contributors = contributor_analyzer.get_all_contributors()
+        
+        word_analyzer = WordAnalyzer(messages)
+        fun_facts = generate_fun_facts(stats, contributors, word_analyzer)
+        
+        # Create mock content analysis
+        content_analysis = ContentAnalysis(
+            year_story=ContentAnalysisYearStory(
+                opening="The year began with ambitious goals",
+                arc="The team rallied around product launches",
+                climax="Q4 saw major milestones achieved",
+                closing="A year of incredible growth",
+            ),
+            topic_highlights=[
+                ContentAnalysisTopicHighlight(
+                    topic="AI Integration",
+                    insight="AI topics dominated Q4 discussions",
+                    best_quote="AI features getting great user feedback",
+                    period="Q4 2025",
+                ),
+            ],
+            best_quotes=[
+                ContentAnalysisQuote(
+                    text="What an incredible year team!",
+                    author="David Shalom",
+                    context="Year-end celebration",
+                    period="Q4 2025",
+                ),
+            ],
+            personality_types=[
+                ContentAnalysisPersonality(
+                    username="david.shalom",
+                    display_name="David Shalom",
+                    personality_type="The Announcer",
+                    evidence="Most 'shipped' mentions",
+                    fun_fact="Never missed a weekly update",
+                ),
+            ],
+        )
+        
+        # Generate video data with content analysis
+        video_data = generate_video_data(
+            channel_name="product-updates",
+            year=2025,
+            channel_stats=stats,
+            quarterly_activity=quarters,
+            contributors=contributors,
+            fun_facts=fun_facts,
+            content_analysis=content_analysis,
+        )
+        
+        # Verify content analysis is included
+        assert video_data.contentAnalysis is not None
+        assert video_data.contentAnalysis.yearStory is not None
+        assert video_data.contentAnalysis.yearStory["opening"] == "The year began with ambitious goals"
+        assert len(video_data.contentAnalysis.topicHighlights) == 1
+        assert len(video_data.contentAnalysis.bestQuotes) == 1
+        assert len(video_data.contentAnalysis.personalityTypes) == 1
+
+    def test_video_data_json_includes_content_analysis(self):
+        """Test that content analysis is properly serialized to JSON."""
+        import json
+        from slack_wrapped.models import (
+            ContentAnalysis,
+            ContentAnalysisYearStory,
+            ContentAnalysisTopicHighlight,
+            ContentAnalysisQuote,
+            ContentAnalysisPersonality,
+        )
+        
+        parser = SlackParser()
+        messages = parser.parse_file(str(SAMPLE_MESSAGES_FILE))
+        
+        config = Config.load(str(SAMPLE_CONFIG_FILE))
+        
+        channel_analyzer = ChannelAnalyzer(messages)
+        stats = channel_analyzer.calculate_stats()
+        quarters = channel_analyzer.get_quarterly_activity()
+        
+        contributor_analyzer = ContributorAnalyzer(messages, config)
+        contributors = contributor_analyzer.get_all_contributors()
+        
+        word_analyzer = WordAnalyzer(messages)
+        fun_facts = generate_fun_facts(stats, contributors, word_analyzer)
+        
+        content_analysis = ContentAnalysis(
+            year_story=ContentAnalysisYearStory(
+                opening="Test opening",
+                arc="Test arc",
+                climax="Test climax",
+                closing="Test closing",
+            ),
+            topic_highlights=[],
+            best_quotes=[],
+            personality_types=[],
+        )
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "video-data.json"
+            
+            video_data = generate_video_data(
+                channel_name="product-updates",
+                year=2025,
+                channel_stats=stats,
+                quarterly_activity=quarters,
+                contributors=contributors,
+                fun_facts=fun_facts,
+                content_analysis=content_analysis,
+                output_path=output_path,
+            )
+            
+            # Load and verify JSON
+            with open(output_path) as f:
+                loaded = json.load(f)
+            
+            assert "contentAnalysis" in loaded
+            assert loaded["contentAnalysis"]["yearStory"]["opening"] == "Test opening"
+            assert loaded["contentAnalysis"]["yearStory"]["arc"] == "Test arc"
+            assert loaded["contentAnalysis"]["yearStory"]["climax"] == "Test climax"
+            assert loaded["contentAnalysis"]["yearStory"]["closing"] == "Test closing"
+
+
 class TestE2EEdgeCases:
     """Edge case tests for the pipeline."""
 
